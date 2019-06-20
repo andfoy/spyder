@@ -2019,13 +2019,18 @@ class CodeEditor(TextEditBaseWidget):
             self.highlight_line_warning(block_data)
 
     def highlight_line_warning(self, block_data):
-        self.clear_extra_selections('code_analysis')
-        self.__highlight_selection('code_analysis', block_data.selection,
-                                   background_color=block_data.color)
+        self.clear_extra_selections('code_analysis_highlight')
+        color = block_data.color
+        color.setAlpha(50)
+        self.__highlight_selection('code_analysis_highlight',
+                                   block_data.selection,
+                                   background_color=color)
+        color.setAlpha(255)
         self.update_extra_selections()
         self.linenumberarea.update()
         QTimer.singleShot(
-            5000, lambda: self.clear_extra_selections('code_analysis'))
+            5000, lambda: self.clear_extra_selections(
+                'code_analysis_highlight'))
 
     def get_current_warnings(self):
         """
