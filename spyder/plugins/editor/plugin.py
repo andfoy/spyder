@@ -65,16 +65,22 @@ from spyder.plugins.mainmenu.api import ApplicationMenus
 
 logger = logging.getLogger(__name__)
 
-
+# FIXME 1: Use SpyderDockablePlugin
 class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
     """
     Multi-file Editor widget
     """
     CONF_SECTION = 'editor'
+
+    # FIXME 2: Remove this and replace by CONF_WIDGET_CLASS
     CONFIGWIDGET_CLASS = EditorConfigPage
     CONF_FILE = False
+
+    # FIXME 3: Document these class attributes
     TEMPFILE_PATH = get_conf_path('temp.py')
     TEMPLATE_PATH = get_conf_path('template.py')
+
+    # FIXME 4: Remove this
     DISABLE_ACTIONS_WHEN_HIDDEN = False  # SpyderPluginWidget class attribute
 
     # This is required for the new API
@@ -83,11 +89,15 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
     OPTIONAL = [Plugins.Completions, Plugins.OutlineExplorer]
 
     # Signals
+    # FIXME 5: Editor should connect these signals to the ipythonconsole
+    # not the other way round.
     run_in_current_ipyclient = Signal(str, str, str,
                                       bool, bool, bool, bool, bool)
     run_cell_in_ipyclient = Signal(str, object, str, bool, bool)
     debug_cell_in_ipyclient = Signal(str, object, str, bool, bool)
     exec_in_extconsole = Signal(str, bool)
+
+    # FIXME 6: Replace by sig_redirect_stdio_requested
     redirect_stdio = Signal(bool)
 
     sig_dir_opened = Signal(str)
@@ -104,6 +114,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
     This option is available on the options menu of the editor plugin
     """
 
+    # FIXME 7: This signal should be moved to the breakpoints
     breakpoints_saved = Signal()
 
     sig_file_opened_closed_or_updated = Signal(str, str)
@@ -120,6 +131,8 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         closed or updated.
     """
 
+    # FIXME 8: The intention of this signal should be determined by the
+    # ipythonconsole and not the editor
     sig_file_debug_message_requested = Signal()
 
     # This signal is fired for any focus change among all editor stacks
@@ -156,11 +169,16 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
     This signal is emitted when the editor finished to open files.
     """
 
+    # FIXME 9: Comply with the `SpyderDockablePlugin` signature, which omits
+    # a constructor
     def __init__(self, parent, ignore_last_opened_files=False):
         SpyderPluginWidget.__init__(self, parent)
 
+        # FIXME 9.1: Remove this
         self.__set_eol_chars = True
 
+        # FIXME 10: Move this to a function. See how other templates can be created
+        # here
         # Creating template if it doesn't already exist
         if not osp.isfile(self.TEMPLATE_PATH):
             if os.name == "nt":
@@ -177,9 +195,12 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             except EnvironmentError:
                 pass
 
+        # FIXME 11: Move this to the on_plugin_registration method for projects
+        # and outline explorer
         self.projects = None
         self.outlineexplorer = None
 
+        # FIXME 12: Remove all lists refering to actions
         self.file_dependent_actions = []
         self.pythonfile_dependent_actions = []
         self.dock_toolbar_actions = None
@@ -187,22 +208,29 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         self.stack_menu_actions = None
         self.checkable_actions = {}
 
+        # FIXME 13: Review how to manage the opening of the files once Spyder
+        # setups
         self.__first_open_files_setup = True
         self.editorstacks = []
         self.last_focused_editorstack = {}
         self.editorwindows = []
         self.editorwindows_to_be_created = []
+
+        # FIXME 14: Migrate to new API
         self.toolbar_list = None
         self.menu_list = None
 
+        # FIXME 15: Remove setup function and use the new API
         # We need to call this here to create self.dock_toolbar_actions,
         # which is used below.
         self._setup()
         self.options_button.hide()
 
+        # FIXME 16: Move the dialog to the run plugin
         # Configuration dialog size
         self.dialog_size = None
 
+        # FIXME 17: Migrate to the new statusbar API
         self.vcs_status = VCSStatus(self)
         self.cursorpos_status = CursorPositionStatus(self)
         self.encoding_status = EncodingStatus(self)
@@ -218,16 +246,19 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             statusbar.add_status_widget(self.cursorpos_status)
             statusbar.add_status_widget(self.vcs_status)
 
+        # FIXME 18: Remove dock toolbar and move the actions to the new API
         layout = QVBoxLayout()
         self.dock_toolbar = QToolBar(self)
         add_actions(self.dock_toolbar, self.dock_toolbar_actions)
         layout.addWidget(self.dock_toolbar)
 
+        # FIXME 19: Move these attributes and functionality to the container
         self.last_edit_cursor_pos = None
         self.cursor_undo_history = []
         self.cursor_redo_history = []
         self.__ignore_cursor_history = True
 
+        # FIXME 20: Move these attributes and functionality to the container
         # Completions setup
         self.completion_capabilities = {}
 
@@ -237,11 +268,13 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         # Change module completions when PYTHONPATH changes
         self.main.sig_pythonpath_changed.connect(self.set_path)
 
+        # FIXME 21: Move these attributes and functionality to the container
         # Find widget
         self.find_widget = FindReplace(self, enable_replace=True)
         self.find_widget.hide()
         self.register_widget_shortcuts(self.find_widget)
 
+        # FIXME 22: Move these attributes and functionality to the container
         # Start autosave component
         # (needs to be done before EditorSplitter)
         self.autosave = AutosaveForPlugin(self)
@@ -250,6 +283,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         self.autosave.interval = self.get_option('autosave_interval') * 1000
         self.autosave.enabled = self.get_option('autosave_enabled')
 
+        # FIXME 23: Move these attributes and functionality to the container
         # Tabbed editor widget + Find/Replace widget
         editor_widgets = QWidget(self)
         editor_layout = QVBoxLayout()
@@ -260,6 +294,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         editor_layout.addWidget(self.editorsplitter)
         editor_layout.addWidget(self.find_widget)
 
+        # FIXME 24: Move these attributes and functionality to the container
         # Splitter: editor widgets (see above) + outline explorer
         self.splitter = QSplitter(self)
         self.splitter.setContentsMargins(0, 0, 0, 0)
@@ -270,23 +305,28 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         self.setLayout(layout)
         self.setFocusPolicy(Qt.ClickFocus)
 
+        # FIXME 25: Move these attributes and functionality to the container
         # Editor's splitter state
         state = self.get_option('splitter_state', None)
         if state is not None:
             self.splitter.restoreState( QByteArray().fromHex(
                     str(state).encode('utf-8')) )
 
+        # FIXME 26: Move these attributes and functionality to the container
         self.recent_files = self.get_option('recent_files', [])
         self.untitled_num = 0
 
+        # FIXME 27: Move these attributes to one to either the run or ipythonconsole plugins
         # Parameters of last file execution:
         self.__last_ic_exec = None # internal console
         self.__last_ec_exec = None # external console
 
+        # FIXME 28: Move these attributes and functionality to the container
         # File types and filters used by the Open dialog
         self.edit_filetypes = None
         self.edit_filters = None
 
+        # FIXME 29: Move these attributes to the container
         self.__ignore_cursor_history = False
         current_editor = self.get_current_editor()
         if current_editor is not None:
