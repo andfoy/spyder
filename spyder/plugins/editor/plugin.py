@@ -336,9 +336,11 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         self.update_cursorpos_actions()
         self.set_path()
 
+    # FIXME 30: Remove this
     def set_projects(self, projects):
         self.projects = projects
 
+    # FIXME 31: Remove this - dead code
     @Slot()
     def show_hide_projects(self):
         if self.projects is not None:
@@ -350,6 +352,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 dw.raise_()
             self.switch_to_plugin()
 
+    # FIXME 32: Move this to the on_registration
     def set_outlineexplorer(self, outlineexplorer):
         self.outlineexplorer = outlineexplorer
         for editorstack in self.editorstacks:
@@ -365,6 +368,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                              self.load(filenames=filenames, editorwindow=self))
 
     #------ Private API --------------------------------------------------------
+    # FIXME 33: Move to the container
     def restore_scrollbar_position(self):
         """Restoring scrollbar position after main window is visible"""
         # Widget is now visible, we may center cursor on top level editor:
@@ -373,6 +377,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         except AttributeError:
             pass
 
+    # FIXME 34: Move to the container
     @Slot(dict)
     def report_open_file(self, options):
         """Report that a file was opened to the completion manager."""
@@ -402,6 +407,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 logger.debug('Setting {0} completions off'.format(filename))
                 codeeditor.completions_available = False
 
+    # FIXME 35: Move to the container
     @Slot(dict, str)
     def register_completion_capabilities(self, capabilities, language):
         """
@@ -434,16 +440,19 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
 
         self.start_completion_services(language)
 
+    # FIXME 36: Move to the container
     def start_completion_services(self, language):
         """Notify all editorstacks about LSP server availability."""
         for editorstack in self.editorstacks:
             editorstack.start_completion_services(language)
 
+    # FIXME 37: Move to the container
     def stop_completion_services(self, language):
         """Notify all editorstacks about LSP server unavailability."""
         for editorstack in self.editorstacks:
             editorstack.stop_completion_services(language)
 
+    # FIXME 38: Move to the container
     def send_completion_request(self, language, request, params):
         logger.debug("Perform request {0} for: {1}".format(
             request, params['file']))
@@ -459,6 +468,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         meth(*args, **kwargs)
 
     #------ SpyderPluginWidget API ---------------------------------------------
+    # FIXME 39: Rename to new API
     @staticmethod
     def get_plugin_title():
         """Return widget title"""
@@ -1271,6 +1281,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         if current_editor:
             current_editor.update_debugger_panel_state(state, last_step)
 
+    # FIXME: Fix to the new API
     def register_plugin(self):
         """Register plugin in Spyder's main window"""
         completions = self.main.get_plugin(Plugins.Completions, error=False)
@@ -1337,6 +1348,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 action.setChecked(state)
                 action.blockSignals(False)
 
+    # FIXME: Update to the new API
     def update_font(self):
         """Update font from Preferences"""
         font = self.get_font()
@@ -1350,6 +1362,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 comp_widget.setup_appearance(completion_size, font)
                 kite_call_to_action.setFont(font)
 
+    # FIXME: Move to the container
     def set_ancestor(self, ancestor):
         """
         Set ancestor of child widgets like the CompletionWidget.
@@ -1366,6 +1379,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 comp_widget.setParent(ancestor)
                 kite_call_to_action.setParent(ancestor)
 
+    # FIXME: Move to the container
     def _create_checkable_action(self, text, conf_name, method=''):
         """Helper function to create a checkable action.
 
@@ -1397,6 +1411,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
 
         return action
 
+    # FIXME: Move to the container
     @Slot(bool, str, str)
     def _toggle_checkable_action(self, checked, method_name, conf_name):
         """
@@ -1431,6 +1446,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 completions.after_configuration_update([])
 
     #------ Focus tabwidget
+    # FIXME: Move to the container
     def __get_focused_editorstack(self):
         fwidget = QApplication.focusWidget()
         if isinstance(fwidget, EditorStack):
@@ -1440,20 +1456,24 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 if editorstack.isAncestorOf(fwidget):
                     return editorstack
 
+    # FIXME: Move to the container
     def set_last_focused_editorstack(self, editorwindow, editorstack):
         self.last_focused_editorstack[editorwindow] = editorstack
         # very last editorstack
         self.last_focused_editorstack[None] = editorstack
 
+    # FIXME: Move to the container
     def get_last_focused_editorstack(self, editorwindow=None):
         return self.last_focused_editorstack[editorwindow]
 
+    # FIXME: Move to the container
     def remove_last_focused_editorstack(self, editorstack):
         for editorwindow, widget in list(
                 self.last_focused_editorstack.items()):
             if widget is editorstack:
                 self.last_focused_editorstack[editorwindow] = None
 
+    # FIXME: Move to the container
     def save_focused_editorstack(self):
         editorstack = self.__get_focused_editorstack()
         if editorstack is not None:
@@ -1462,6 +1482,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                     self.set_last_focused_editorstack(win, editorstack)
 
     # ------ Handling editorstacks
+    # FIXME: Move to the container
     def register_editorstack(self, editorstack):
         self.editorstacks.append(editorstack)
         self.register_widget_shortcuts(editorstack)
@@ -1639,6 +1660,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         # component
         self.autosave.register_autosave_for_stack(editorstack.autosave)
 
+    # FIXME: Move to the container
     def unregister_editorstack(self, editorstack):
         """Removing editorstack only if it's not the last remaining"""
         self.remove_last_focused_editorstack(editorstack)
@@ -1650,11 +1672,13 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             # editorstack was not removed!
             return False
 
+    # FIXME: Move to the container
     def clone_editorstack(self, editorstack):
         editorstack.clone_from(self.editorstacks[0])
         for finfo in editorstack.data:
             self.register_widget_shortcuts(finfo.editor)
 
+    # FIXME: Move to the container
     @Slot(str, str)
     def close_file_in_all_editorstacks(self, editorstack_id_str, filename):
         for editorstack in self.editorstacks:
@@ -1664,6 +1688,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 editorstack.close_file(index, force=True)
                 editorstack.blockSignals(False)
 
+    # FIXME: Move to the container
     @Slot(str, str, str)
     def file_saved_in_editorstack(self, editorstack_id_str,
                                   original_filename, filename):
@@ -1673,6 +1698,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 editorstack.file_saved_in_other_editorstack(original_filename,
                                                             filename)
 
+    # FIXME: Move to the container
     @Slot(str, str, str)
     def file_renamed_in_data_in_editorstack(self, editorstack_id_str,
                                             original_filename, filename):
@@ -1682,6 +1708,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 editorstack.rename_in_data(original_filename, filename)
 
     #------ Handling editor windows
+    # FIXME: Fix to the new API
     def setup_other_windows(self):
         """Setup toolbars and menus for 'New window' instances"""
         # TODO: All the actions here should be taken from
@@ -1713,6 +1740,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             win = self.create_new_window()
             win.set_layout_settings(layout_settings)
 
+    # FIXME: Fix to the new API
     def switch_to_plugin(self):
         """
         Reimplemented method to deactivate shortcut when
@@ -1721,6 +1749,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         if not self.editorwindows:
             super(Editor, self).switch_to_plugin()
 
+    # FIXME: Fix to the new API
     def create_new_window(self):
         window = EditorMainWindow(
             self, self.stack_menu_actions, self.toolbar_list, self.menu_list)
@@ -1733,20 +1762,25 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         window.destroyed.connect(lambda: self.unregister_editorwindow(window))
         return window
 
+    # FIXME: Fix to the new API
     def register_editorwindow(self, window):
         self.editorwindows.append(window)
 
+    # FIXME: Fix to the new API
     def unregister_editorwindow(self, window):
         self.editorwindows.pop(self.editorwindows.index(window))
 
 
     #------ Accessors
+    # FIXME: Move to the container
     def get_filenames(self):
         return [finfo.filename for finfo in self.editorstacks[0].data]
 
+    # FIXME: Dead code
     def get_filename_index(self, filename):
         return self.editorstacks[0].has_filename(filename)
 
+    # FIXME: Move to the container
     def get_current_editorstack(self, editorwindow=None):
         if self.editorstacks is not None:
             if len(self.editorstacks) == 1:
@@ -1760,29 +1794,35 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                         editorstack = self.editorstacks[0]
             return editorstack
 
+    # FIXME: Move to the container
     def get_current_editor(self):
         editorstack = self.get_current_editorstack()
         if editorstack is not None:
             return editorstack.get_current_editor()
 
+    # FIXME: Move to the container
     def get_current_finfo(self):
         editorstack = self.get_current_editorstack()
         if editorstack is not None:
             return editorstack.get_current_finfo()
 
+    # FIXME: Move to the container
     def get_current_filename(self):
         editorstack = self.get_current_editorstack()
         if editorstack is not None:
             return editorstack.get_current_filename()
 
+    # FIXME: Move to the container
     def get_current_language(self):
         editorstack = self.get_current_editorstack()
         if editorstack is not None:
             return editorstack.get_current_language()
 
+    # FIXME: Move to the container
     def is_file_opened(self, filename=None):
         return self.editorstacks[0].is_file_opened(filename)
 
+    # FIXME: Move to the container
     def set_current_filename(self, filename, editorwindow=None, focus=True):
         """Set focus to *filename* if this file has been opened.
 
@@ -1791,11 +1831,13 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         editorstack = self.get_current_editorstack(editorwindow)
         return editorstack.set_current_filename(filename, focus)
 
+    # FIXME: Update to the new API
     def set_path(self):
         for finfo in self.editorstacks[0].data:
             finfo.path = self.main.get_spyder_pythonpath()
 
     #------ Refresh methods
+    # FIXME: Move to the container
     def refresh_file_dependent_actions(self):
         """Enable/disable file dependent actions
         (only if dockwidget is visible)"""
@@ -1804,6 +1846,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             for action in self.file_dependent_actions:
                 action.setEnabled(enable)
 
+    # FIXME: Move to the container
     def refresh_save_all_action(self):
         """Enable 'Save All' if there are files to be saved"""
         editorstack = self.get_current_editorstack()
@@ -1812,6 +1855,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                         for finfo in editorstack.data)
             self.save_all_action.setEnabled(state)
 
+    # FIXME: Move to the container
     def update_warning_menu(self):
         """Update warning list menu"""
         editor = self.get_current_editor()
@@ -1826,6 +1870,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             action = create_action(self, text=text, icon=icon, triggered=slot)
             self.warning_menu.addAction(action)
 
+    # FIXME: Move to the container
     def update_todo_menu(self):
         """Update todo list menu"""
         editorstack = self.get_current_editorstack()
@@ -1839,6 +1884,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             self.todo_menu.addAction(action)
         self.update_todo_actions()
 
+    # FIXME: Move to the container
     def todo_results_changed(self):
         """
         Synchronize todo results between editorstacks
@@ -1854,6 +1900,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                     other_editorstack.set_todo_results(filename, results)
         self.update_todo_actions()
 
+    # FIXME: Move to the container
     def refresh_eol_chars(self, os_name):
         os_name = to_text_string(os_name)
         self.__set_eol_chars = False
@@ -1865,9 +1912,11 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             self.mac_eol_action.setChecked(True)
         self.__set_eol_chars = True
 
+    # FIXME: Move to the container
     def refresh_formatting(self, status):
         self.formatting_action.setEnabled(status)
 
+    # FIXME: Update to new API
     def refresh_formatter_name(self):
         formatter = CONF.get(
             'completions',
@@ -1878,6 +1927,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 formatter.capitalize()))
 
     #------ Slots
+    # FIXME: Move to the container
     def opened_files_list_changed(self):
         """
         Opened files list has changed:
@@ -1900,6 +1950,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             self.sig_file_opened_closed_or_updated.emit(
                 self.get_current_filename(), self.get_current_language())
 
+    # FIXME: Move to the container
     def update_code_analysis_actions(self):
         """Update actions in the warnings menu."""
         editor = self.get_current_editor()
@@ -1913,6 +1964,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                        self.next_warning_action):
             action.setEnabled(editor.errors_present())
 
+    # FIXME: Move to the container
     def update_todo_actions(self):
         editorstack = self.get_current_editorstack()
         results = editorstack.get_todo_results()
@@ -1921,12 +1973,14 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         if state is not None:
             self.todo_list_action.setEnabled(state)
 
+    # FIXME: Update to the new API
     @Slot(set)
     def update_active_languages(self, languages):
         if self.main.get_plugin(Plugins.Completions, error=False):
             self.main.completions.update_client_status(languages)
 
     # ------ Bookmarks
+    # FIXME: Move to the container
     def save_bookmarks(self, filename, bookmarks):
         """Receive bookmark changes and save them."""
         filename = to_text_string(filename)
@@ -1936,6 +1990,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         save_bookmarks(filename, bookmarks)
 
     #------ File I/O
+    # FIXME: Move to the container
     def __load_temp_file(self):
         """Load temporary file from a text file in user home directory"""
         if not osp.isfile(self.TEMPFILE_PATH):
@@ -1955,6 +2010,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
 
         self.load(self.TEMPFILE_PATH)
 
+    # FIXME: Move to the container
     @Slot()
     def __set_workdir(self):
         """Set current script directory as working directory"""
@@ -1963,6 +2019,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             directory = osp.dirname(osp.abspath(fname))
             self.sig_dir_opened.emit(directory)
 
+    # FIXME: Move to the container
     def __add_recent_file(self, fname):
         """Add to recent file list"""
         if fname is None:
@@ -1973,6 +2030,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         if len(self.recent_files) > self.get_option('max_recent_files'):
             self.recent_files.pop(-1)
 
+    # FIXME: Move to the container
     def _clone_file_everywhere(self, finfo):
         """Clone file (*src_editor* widget) in all editorstacks
         Cloning from the first editorstack in which every single new editor
@@ -1981,7 +2039,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             editor = editorstack.clone_editor_from(finfo, set_current=False)
             self.register_widget_shortcuts(editor)
 
-
+    # FIXME: Update to the new API
     @Slot()
     @Slot(str)
     def new(self, fname=None, editorstack=None, text=None):
@@ -2088,10 +2146,12 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         if not created_from_here:
             self.save(force=True)
 
+    # FIXME: Update to the new API
     def edit_template(self):
         """Edit new file template"""
         self.load(self.TEMPLATE_PATH)
 
+    # FIXME: Move to the container
     def update_recent_file_menu(self):
         """Update recent file menu"""
         recent_files = []
@@ -2112,6 +2172,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         add_actions(self.recent_file_menu, (None, self.max_recent_action,
                                             self.clear_recent_action))
 
+    # FIXME: Move to the container
     @Slot()
     def clear_recent_files(self):
         """Clear recent files list"""
@@ -2127,6 +2188,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         if valid:
             self.set_option('max_recent_files', mrf)
 
+    # FIXME: Update to the new API
     @Slot()
     @Slot(str)
     @Slot(str, int, str)
@@ -2308,6 +2370,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         self.__ignore_cursor_history = cursor_history_state
         self.add_cursor_to_history()
 
+    # FIXME: Move to the container
     @Slot()
     def print_file(self):
         """Print current file"""
@@ -2327,6 +2390,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             editor.print_(printer)
             self.ending_long_process()
 
+    # FIXME: Move to the container
     @Slot()
     def print_preview(self):
         """Print preview for current file"""
@@ -2342,6 +2406,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         preview.exec_()
         self.redirect_stdio.emit(True)
 
+    # FIXME: Move to the container
     def can_close_file(self, filename=None):
         """
         Check if a file can be closed taking into account debugging state.
@@ -2366,6 +2431,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             self.sig_file_debug_message_requested.emit()
         return can_close
 
+    # FIXME: Update to the new API
     @Slot()
     def close_file(self):
         """Close current file"""
@@ -2374,17 +2440,20 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             editorstack = self.get_current_editorstack()
             editorstack.close_file()
 
+    # FIXME: Move to the container
     @Slot()
     def close_all_files(self):
         """Close all opened scripts"""
         self.editorstacks[0].close_all_files()
 
+    # FIXME: Update to the new API
     @Slot()
     def save(self, index=None, force=False):
         """Save file"""
         editorstack = self.get_current_editorstack()
         return editorstack.save(index=index, force=force)
 
+    # FIXME: Update to the new API
     @Slot()
     def save_as(self):
         """Save *as* the currently edited file"""
@@ -2393,23 +2462,27 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             fname = editorstack.get_current_filename()
             self.__add_recent_file(fname)
 
+    # FIXME: Update to the new API
     @Slot()
     def save_copy_as(self):
         """Save *copy as* the currently edited file"""
         editorstack = self.get_current_editorstack()
         editorstack.save_copy_as()
 
+    # FIXME: Update to the new API
     @Slot()
     def save_all(self, save_new_files=True):
         """Save all opened files"""
         self.get_current_editorstack().save_all(save_new_files=save_new_files)
 
+    # FIXME: Dead code
     @Slot()
     def revert(self):
         """Revert the currently edited file from disk"""
         editorstack = self.get_current_editorstack()
         editorstack.revert()
 
+    # FIXME: Move to the container
     @Slot()
     def find(self):
         """Find slot"""
@@ -2417,24 +2490,28 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         editorstack.find_widget.show()
         editorstack.find_widget.search_text.setFocus()
 
+    # FIXME: Update to the new API
     @Slot()
     def find_next(self):
         """Fnd next slot"""
         editorstack = self.get_current_editorstack()
         editorstack.find_widget.find_next()
 
+    # FIXME: Move to the container
     @Slot()
     def find_previous(self):
         """Find previous slot"""
         editorstack = self.get_current_editorstack()
         editorstack.find_widget.find_previous()
 
+    # FIXME: Move to the container
     @Slot()
     def replace(self):
         """Replace slot"""
         editorstack = self.get_current_editorstack()
         editorstack.find_widget.show_replace()
 
+    # FIXME: Move to the container
     def open_last_closed(self):
         """ Reopens the last closed tab."""
         editorstack = self.get_current_editorstack()
@@ -2446,6 +2523,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             self.load(file_to_open)
 
     #------ Explorer widget
+    # FIXME: Move to the container
     def close_file_from_name(self, filename):
         """Close file from its name"""
         filename = osp.abspath(to_text_string(filename))
@@ -2453,10 +2531,12 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         if index is not None:
             self.editorstacks[0].close_file(index)
 
+    # FIXME: Dead code
     def removed(self, filename):
         """File was removed in file explorer widget or in project explorer"""
         self.close_file_from_name(filename)
 
+    # FIXME: Dead code
     def removed_tree(self, dirname):
         """Directory was removed in project explorer widget"""
         dirname = osp.abspath(to_text_string(dirname))
@@ -2464,6 +2544,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             if osp.abspath(fname).startswith(dirname):
                 self.close_file_from_name(fname)
 
+    # FIXME: Move to the container
     def renamed(self, source, dest):
         """
         Propagate file rename to editor stacks and autosave component.
@@ -2481,6 +2562,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             self.editorstacks[0].autosave.file_renamed(
                 filename, to_text_string(dest))
 
+    # FIXME: Update to new API
     def renamed_tree(self, source, dest):
         """Directory was renamed in file explorer or in project explorer."""
         dirname = osp.abspath(to_text_string(source))
@@ -2491,6 +2573,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 self.renamed(source=fname, dest=new_filename)
 
     #------ Source code
+    # FIXME: Dead code
     @Slot()
     def indent(self):
         """Indent current line or selection"""
@@ -2498,6 +2581,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         if editor is not None:
             editor.indent()
 
+    # FIXME: Dead code
     @Slot()
     def unindent(self):
         """Unindent current line or selection"""
@@ -2505,6 +2589,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         if editor is not None:
             editor.unindent()
 
+    # FIXME: Move to the container
     @Slot()
     def text_uppercase(self):
         """Change current line or selection to uppercase."""
@@ -2512,6 +2597,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         if editor is not None:
             editor.transform_to_uppercase()
 
+    # FIXME: Move to the container
     @Slot()
     def text_lowercase(self):
         """Change current line or selection to lowercase."""
@@ -2519,6 +2605,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         if editor is not None:
             editor.transform_to_lowercase()
 
+    # FIXME: Move to the container
     @Slot()
     def toggle_comment(self):
         """Comment current line or selection"""
@@ -2526,6 +2613,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         if editor is not None:
             editor.toggle_comment()
 
+    # FIXME: Move to the container
     @Slot()
     def blockcomment(self):
         """Block comment current line or selection"""
@@ -2533,12 +2621,15 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         if editor is not None:
             editor.blockcomment()
 
+    # FIXME: Move to the container
     @Slot()
     def unblockcomment(self):
         """Un-block comment current line or selection"""
         editor = self.get_current_editor()
         if editor is not None:
             editor.unblockcomment()
+
+    # FIXME: Move to the container
     @Slot()
     def go_to_next_todo(self):
         self.switch_to_plugin()
@@ -2548,6 +2639,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         cursor = editor.textCursor()
         self.add_cursor_to_history(filename, cursor)
 
+    # FIXME: Move to the container
     @Slot()
     def go_to_next_warning(self):
         self.switch_to_plugin()
@@ -2557,6 +2649,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         cursor = editor.textCursor()
         self.add_cursor_to_history(filename, cursor)
 
+    # FIXME: Move to the container
     @Slot()
     def go_to_previous_warning(self):
         self.switch_to_plugin()
@@ -2566,6 +2659,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         cursor = editor.textCursor()
         self.add_cursor_to_history(filename, cursor)
 
+    # FIXME: Move to the container
     def toggle_eol_chars(self, os_name, checked):
         if checked:
             editor = self.get_current_editor()
@@ -2575,18 +2669,21 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                     eol_chars=sourcecode.get_eol_chars_from_os_name(os_name)
                 )
 
+    # FIXME: Move to the container
     @Slot()
     def remove_trailing_spaces(self):
         self.switch_to_plugin()
         editorstack = self.get_current_editorstack()
         editorstack.remove_trailing_spaces()
 
+    # FIXME: Move to the container
     @Slot()
     def format_document_or_selection(self):
         self.switch_to_plugin()
         editorstack = self.get_current_editorstack()
         editorstack.format_document_or_selection()
 
+    # FIXME: Move to the container
     @Slot()
     def fix_indentation(self):
         self.switch_to_plugin()
@@ -2594,6 +2691,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         editorstack.fix_indentation()
 
     #------ Cursor position history management
+    # FIXME: Move to the container
     def update_cursorpos_actions(self):
         self.previous_edit_cursor_action.setEnabled(
             self.last_edit_cursor_pos is not None)
@@ -2602,6 +2700,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         self.next_cursor_action.setEnabled(
             len(self.cursor_redo_history) > 0)
 
+    # FIXME: Move to the container
     def add_cursor_to_history(self, filename=None, cursor=None):
         if self.__ignore_cursor_history:
             return
@@ -2630,9 +2729,11 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         self.cursor_undo_history.append((filename, cursor))
         self.update_cursorpos_actions()
 
+    # FIXME: Move to the container
     def text_changed_at(self, filename, position):
         self.last_edit_cursor_pos = (to_text_string(filename), position)
 
+    # FIXME: Move to the container
     def current_file_changed(self, filename, position, line, column):
         cursor = self.get_current_editor().textCursor()
         self.add_cursor_to_history(to_text_string(filename), cursor)
@@ -2649,6 +2750,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             pdb_last_step = ipyconsole.get_pdb_last_step()
             self.update_pdb_state(pdb_state, pdb_last_step)
 
+    # FIXME: Move to the container
     def current_editor_cursor_changed(self, line, column):
         """Handles the change of the cursor inside the current editor."""
         code_editor = self.get_current_editor()
@@ -2657,6 +2759,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         self.add_cursor_to_history(
             to_text_string(filename), cursor)
 
+    # FIXME: Move to the container
     def remove_file_cursor_history(self, id, filename):
         """Remove the cursor history of a file if the file is closed."""
         new_history = []
@@ -2673,6 +2776,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 new_redo_history.append((cur_filename, cursor))
         self.cursor_redo_history = new_redo_history
 
+    # FIXME: Move to the container
     @Slot()
     def go_to_last_edit_location(self):
         if self.last_edit_cursor_pos is not None:
@@ -2686,6 +2790,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 if position < editor.document().characterCount():
                     editor.set_cursor_position(position)
 
+    # FIXME: Move to the container
     def _pop_next_cursor_diff(self, history, current_filename, current_cursor):
         """Get the next cursor from history that is different from current."""
         while history:
@@ -2695,6 +2800,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 return filename, cursor
         return None, None
 
+    # FIXME: Move to the container
     def _history_steps(self, number_steps,
                        backwards_history, forwards_history,
                        current_filename, current_cursor):
@@ -2717,7 +2823,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 backwards_history.pop())
         return current_filename, current_cursor
 
-
+    # FIXME: Move to the container
     def __move_cursor_position(self, index_move):
         """
         Move the cursor position forward or backward in the cursor
@@ -2763,18 +2869,21 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         self.__ignore_cursor_history = False
         self.update_cursorpos_actions()
 
+    # FIXME: Move to the container
     @Slot()
     def go_to_previous_cursor_position(self):
         self.__ignore_cursor_history = True
         self.switch_to_plugin()
         self.__move_cursor_position(-1)
 
+    # FIXME: Move to the container
     @Slot()
     def go_to_next_cursor_position(self):
         self.__ignore_cursor_history = True
         self.switch_to_plugin()
         self.__move_cursor_position(1)
 
+    # FIXME: Move to the container
     @Slot()
     def go_to_line(self, line=None):
         """Open 'go to line' dialog"""
@@ -2784,6 +2893,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         if editorstack is not None:
             editorstack.go_to_line(line)
 
+    # FIXME: Find a way to delegate this to the breakpoints plugin
     @Slot()
     def set_or_clear_breakpoint(self):
         """Set/Clear breakpoint"""
@@ -2792,6 +2902,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             self.switch_to_plugin()
             editorstack.set_or_clear_breakpoint()
 
+    # FIXME: Find a way to delegate this to the breakpoints plugin
     @Slot()
     def set_or_edit_conditional_breakpoint(self):
         """Set/Edit conditional breakpoint"""
@@ -2800,6 +2911,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             self.switch_to_plugin()
             editorstack.set_or_edit_conditional_breakpoint()
 
+    # FIXME: Find a way to delegate this to the breakpoints plugin
     @Slot()
     def clear_all_breakpoints(self):
         """Clear breakpoints in all files"""
@@ -2812,6 +2924,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 data.editor.debugger.clear_breakpoints()
         self.refresh_plugin()
 
+    # FIXME: Find a way to delegate this to the breakpoints plugin
     def clear_breakpoint(self, filename, lineno):
         """Remove a single breakpoint"""
         clear_breakpoint(filename, lineno)
@@ -2823,12 +2936,14 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 editorstack.data[index].editor.debugger.toogle_breakpoint(
                         lineno)
 
+    # FIXME: Find a way to delegate this to the ipython console plugin
     def stop_debugging(self):
         """Stop debugging"""
         ipyconsole = self.main.get_plugin(Plugins.IPythonConsole, error=False)
         if ipyconsole:
             ipyconsole.stop_debugging()
 
+    # FIXME: Find a way to delegate this to the ipython console plugin
     def debug_command(self, command):
         """Debug actions"""
         self.switch_to_plugin()
@@ -2838,6 +2953,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             ipyconsole.switch_to_plugin()
 
     # ----- Handlers for the IPython Console kernels
+    # FIXME: Update to the new API
     def _get_editorstack(self):
         """
         Get the current editorstack.
@@ -2850,6 +2966,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
 
         return editorstack
 
+    # FIXME: Update to the new API
     def _get_editor(self, filename):
         """Get editor for filename and set it as the current editor."""
         editorstack = self._get_editorstack()
@@ -2865,6 +2982,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
 
         return editorstack.data[index].editor
 
+    # FIXME: Update to the new API
     def handle_run_cell(self, cell_name, filename):
         """
         Get cell code from cell name and file name.
@@ -2881,6 +2999,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         # The file is open, load code from editor
         return editor.get_cell_code(cell_name)
 
+    # FIXME: Update to the new API
     def handle_cell_count(self, filename):
         """Get number of cells in file to loop."""
         editor = self._get_editor(filename)
@@ -2892,10 +3011,12 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         # The file is open, get cell count from editor
         return editor.get_cell_count()
 
+    # FIXME: Update to the new API
     def handle_current_filename(self, filename):
         """Get the current filename."""
         return self._get_editorstack().get_current_finfo().filename
 
+    # FIXME: Update to the new API
     def handle_get_file_code(self, filename, save_all=True):
         """
         Return the bytes that compose the file.
@@ -2916,6 +3037,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         return editor.toPlainText()
 
     #------ Run Python script
+    # FIXME: Move to the container
     @Slot()
     def edit_run_configurations(self):
         dialog = RunConfigDialog(self)
@@ -2930,6 +3052,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 self.load(fname)
                 self.run_file()
 
+    # FIXME: Move this to the run plugin
     @Slot()
     def run_file(self, debug=False):
         """Run script inside current interpreter or in a new one"""
@@ -3001,9 +3124,11 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             # (see SpyderPluginWidget.visibility_changed method)
             editor.setFocus()
 
+    # FIXME: Move to the container
     def set_dialog_size(self, size):
         self.dialog_size = size
 
+    # FIXME: Move this to the run plugin
     @Slot()
     def debug_file(self):
         """Debug current script"""
@@ -3013,6 +3138,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             current_editor.sig_debug_start.emit()
         self.run_file(debug=True)
 
+    # FIXME: Move this to the run plugin
     @Slot()
     def re_run_file(self, save_new_files=True):
         """Re-run last script"""
@@ -3036,30 +3162,35 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                                             debug, python, python_args,
                                             systerm, post_mortem)
 
+    # FIXME: Move this to the run plugin
     @Slot()
     def run_selection(self):
         """Run selection or current line in external console"""
         editorstack = self.get_current_editorstack()
         editorstack.run_selection()
 
+    # FIXME: Move this to the run plugin
     @Slot()
     def run_cell(self):
         """Run current cell"""
         editorstack = self.get_current_editorstack()
         editorstack.run_cell()
 
+    # FIXME: Move this to the run plugin
     @Slot()
     def run_cell_and_advance(self):
         """Run current cell and advance to the next one"""
         editorstack = self.get_current_editorstack()
         editorstack.run_cell_and_advance()
 
+    # FIXME: Move this to the run plugin
     @Slot()
     def debug_cell(self):
         '''Debug Current cell.'''
         editorstack = self.get_current_editorstack()
         editorstack.debug_cell()
 
+    # FIXME: Move this to the run plugin
     @Slot()
     def re_run_last_cell(self):
         """Run last executed cell."""
@@ -3067,6 +3198,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         editorstack.re_run_last_cell()
 
     # ------ Code bookmarks
+    # FIXME: Move this to the container
     @Slot(int)
     def save_bookmark(self, slot_num):
         """Save current line and position as bookmark."""
@@ -3084,6 +3216,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             self.switch_to_plugin()
             editorstack.set_bookmark(slot_num)
 
+    # FIXME: Move this to the container
     @Slot(int)
     def load_bookmark(self, slot_num):
         """Set cursor to bookmarked file and position."""
@@ -3107,6 +3240,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 editor.go_to_line(line_num + 1, linelength)
 
     #------ Zoom in/out/reset
+    # FIXME: Move this to the container
     def zoom(self, factor):
         """Zoom in/out/reset"""
         editor = self.get_current_editorstack().get_current_editor()
@@ -3122,6 +3256,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         editor.update_tab_stop_width_spaces()
 
     #------ Options
+    # FIXME: Move this to the new API
     def apply_plugin_settings(self, options):
         """Apply configuration file's plugin settings"""
         if self.editorstacks is not None:
@@ -3284,6 +3419,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 if todo_n in options and todo_o:
                     finfo.run_todo_finder()
 
+    # FIXME: Move this to the container
     @on_conf_change(option='edge_line')
     def set_edgeline_enabled(self, value):
         if self.editorstacks is not None:
@@ -3291,17 +3427,21 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             for editorstack in self.editorstacks:
                 editorstack.set_edgeline_enabled(value)
 
+    # FIXME: Move this to the container
     @on_conf_change(
         option=('provider_configuration', 'lsp', 'values',
                 'pycodestyle/max_line_length'),
         section='completions'
     )
+
+    # FIXME: Move this to the container
     def set_edgeline_columns(self, value):
         if self.editorstacks is not None:
             logger.debug(f"Set edge line columns to {value}")
             for editorstack in self.editorstacks:
                 editorstack.set_edgeline_columns(value)
 
+    # FIXME: Move this to the container
     @on_conf_change(option='enable_code_snippets', section='completions')
     def set_code_snippets_enabled(self, value):
         if self.editorstacks is not None:
@@ -3309,6 +3449,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             for editorstack in self.editorstacks:
                 editorstack.set_code_snippets_enabled(value)
 
+    # FIXME: Move this to the container
     @on_conf_change(option='automatic_completions')
     def set_automatic_completions_enabled(self, value):
         if self.editorstacks is not None:
@@ -3316,6 +3457,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             for editorstack in self.editorstacks:
                 editorstack.set_automatic_completions_enabled(value)
 
+    # FIXME: Move this to the container
     @on_conf_change(option='automatic_completions_after_chars')
     def set_automatic_completions_after_chars(self, value):
         if self.editorstacks is not None:
@@ -3323,6 +3465,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             for editorstack in self.editorstacks:
                 editorstack.set_automatic_completions_after_chars(value)
 
+    # FIXME: Move this to the container
     @on_conf_change(option='automatic_completions_after_ms')
     def set_automatic_completions_after_ms(self, value):
         if self.editorstacks is not None:
@@ -3330,6 +3473,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             for editorstack in self.editorstacks:
                 editorstack.set_automatic_completions_after_ms(value)
 
+    # FIXME: Move this to the container
     @on_conf_change(option='completions_hint')
     def set_completions_hint_enabled(self, value):
         if self.editorstacks is not None:
@@ -3337,6 +3481,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             for editorstack in self.editorstacks:
                 editorstack.set_completions_hint_enabled(value)
 
+    # FIXME: Move this to the container
     @on_conf_change(option='completions_hint_after_ms')
     def set_completions_hint_after_ms(self, value):
         if self.editorstacks is not None:
@@ -3344,6 +3489,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             for editorstack in self.editorstacks:
                 editorstack.set_completions_hint_after_ms(value)
 
+    # FIXME: Move this to the container
     @on_conf_change(
         option=('provider_configuration', 'lsp', 'values',
                 'enable_hover_hints'),
@@ -3355,6 +3501,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             for editorstack in self.editorstacks:
                 editorstack.set_hover_hints_enabled(value)
 
+    # FIXME: Move this to the container
     @on_conf_change(
         option=('provider_configuration', 'lsp', 'values', 'format_on_save'),
         section='completions'
@@ -3365,6 +3512,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             for editorstack in self.editorstacks:
                 editorstack.set_format_on_save(value)
 
+    # FIXME: Move this to the container
     @on_conf_change(option='underline_errors')
     def set_underline_errors_enabled(self, value):
         if self.editorstacks is not None:
@@ -3372,6 +3520,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
             for editorstack in self.editorstacks:
                 editorstack.set_underline_errors_enabled(value)
 
+    # FIXME: Move this to the container
     @on_conf_change(option='selected', section='appearance')
     def set_color_scheme(self, value):
         if self.editorstacks is not None:
@@ -3380,6 +3529,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 editorstack.set_color_scheme(value)
 
     # --- Open files
+    # FIXME: Update to the new API
     def get_open_filenames(self):
         """Get the list of open files in the current stack"""
         editorstack = self.editorstacks[0]
@@ -3387,6 +3537,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         filenames += [finfo.filename for finfo in editorstack.data]
         return filenames
 
+    # FIXME: Move to the container
     def set_open_filenames(self):
         """
         Set the recent opened files on editor based on active project.
@@ -3399,6 +3550,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
                 filenames = self.get_open_filenames()
                 self.set_option('filenames', filenames)
 
+    # FIXME: Update to the new API
     def setup_open_files(self, close_previous_files=True):
         """
         Open the list of saved files per project.
@@ -3477,28 +3629,33 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         self.set_create_new_file_if_empty(True)
         self.sig_open_files_finished.emit()
 
+    # FIXME: Move this to the container teardown
     def save_open_files(self):
         """Save the list of open files"""
         self.set_option('filenames', self.get_open_filenames())
 
+    # FIXME: Move this to the container
     def set_create_new_file_if_empty(self, value):
         """Change the value of create_new_file_if_empty"""
         for editorstack in self.editorstacks:
             editorstack.create_new_file_if_empty = value
 
     # --- File Menu actions (Mac only)
+    # FIXME: Move this to the container
     @Slot()
     def go_to_next_file(self):
         """Switch to next file tab on the current editor stack."""
         editorstack = self.get_current_editorstack()
         editorstack.tabs.tab_navigate(+1)
 
+    # FIXME: Move this to the container
     @Slot()
     def go_to_previous_file(self):
         """Switch to previous file tab on the current editor stack."""
         editorstack = self.get_current_editorstack()
         editorstack.tabs.tab_navigate(-1)
 
+    # FIXME: Update to new API
     def set_current_project_path(self, root_path=None):
         """
         Set the current active project root path.
@@ -3511,6 +3668,7 @@ class Editor(SpyderPluginWidget, SpyderConfigurationObserver):
         for editorstack in self.editorstacks:
             editorstack.set_current_project_path(root_path)
 
+    # FIXME: Update to new API. Move implementation details to container
     def register_panel(self, panel_class, *args, position=Panel.Position.LEFT,
                        **kwargs):
         """Register a panel in all the editorstacks in the given position."""
