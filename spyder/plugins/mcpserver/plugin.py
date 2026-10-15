@@ -17,6 +17,7 @@ import logging
 import secrets
 
 # Third-party imports
+from qtpy.QtCore import Signal
 from qtpy.QtWidgets import QApplication
 
 # Local imports
@@ -51,6 +52,19 @@ class MCPServer(SpyderPluginV2):
     CONTAINER_CLASS = MCPServerContainer
     CONF_SECTION = NAME
     CONF_FILE = False
+
+    sig_server_started = Signal(str)
+    """
+    This signal is emitted when the server is accepting connections.
+
+    Parameters
+    ----------
+    url: str
+        URL of the MCP endpoint.
+    """
+
+    sig_server_stopped = Signal()
+    """This signal is emitted when the server stops."""
 
     # ---- SpyderPluginV2 API
     # -------------------------------------------------------------------------
@@ -195,18 +209,40 @@ class MCPServer(SpyderPluginV2):
         """Stop the MCP server subprocess."""
         self._client.stop()
 
+    def is_server_running(self) -> bool:
+        """Whether the server is running and accepting connections."""
+        return self._client.url is not None
+
     def get_url(self) -> str | None:
         """Return the URL of the MCP endpoint if the server is running."""
         return self._client.url
 
-    def get_command(self) -> str | None:
-        """Return the Claude Code command to add Spyder as an MCP server."""
+    def get_connection_info(self) -> dict | None:
+        """
+        Return the information needed to connect to the server, or ``None``
+        if it's not running.
+
+        Returns
+        -------
+        dict
+            With the ``url`` of the endpoint and the HTTP ``headers`` to send.
+        """
         url = self.get_url()
         if url is None:
             return None
+        return {
+            "url": url,
+            "headers": {"Authorization": f"Bearer {self.get_conf('token')}"},
+        }
+
+    def get_command(self) -> str | None:
+        """Return the Claude Code command to add Spyder as an MCP server."""
+        info = self.get_connection_info()
+        if info is None:
+            return None
         return (
-            f"claude mcp add --transport http spyder {url} "
-            f"--header \"Authorization: Bearer {self.get_conf('token')}\""
+            f"claude mcp add --transport http spyder {info['url']} "
+            f"--header \"Authorization: {info['headers']['Authorization']}\""
         )
 
     def copy_command(self) -> None:
@@ -251,9 +287,11 @@ class MCPServer(SpyderPluginV2):
 
     def _on_server_ready(self, url: str) -> None:
         self.get_container().set_server_running(True)
+        self.sig_server_started.emit(url)
 
     def _on_server_stopped(self, returncode: int) -> None:
         self.get_container().set_server_running(False)
+        self.sig_server_stopped.emit()
         if returncode not in (0, None) and self.get_conf("enabled"):
             logger.error(
                 "The MCP server exited with code %s. Run Spyder with debug "

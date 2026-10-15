@@ -87,29 +87,6 @@ class BearerTokenMiddleware:
         await self.app(scope, receive, send)
 
 
-# ---- Stdio bridge
-# -----------------------------------------------------------------------------
-def create_stdio_peer() -> JsonRpcPeer:
-    """Create a bridge peer over this process' original stdin/stdout."""
-    stdin = sys.stdin.buffer
-    stdout = sys.stdout.buffer
-
-    # Nothing else may write to the bridge channel, so redirect prints and
-    # library output to stderr.
-    sys.stdout = sys.stderr
-
-    async def readline() -> bytes:
-        # Reading in a thread is portable, unlike connect_read_pipe on
-        # Windows
-        return await asyncio.to_thread(stdin.readline)
-
-    async def write(data: bytes) -> None:
-        stdout.write(data)
-        stdout.flush()
-
-    return JsonRpcPeer(readline, write)
-
-
 # ---- MCP server
 # -----------------------------------------------------------------------------
 def to_content(item: dict) -> types.ContentBlock:
@@ -157,7 +134,7 @@ def create_mcp_server(peer: JsonRpcPeer) -> Server:
 
 
 async def serve(host: str, port: int, token: str) -> None:
-    peer = create_stdio_peer()
+    peer = JsonRpcPeer.from_stdio()
     server = create_mcp_server(peer)
 
     app = BearerTokenMiddleware(

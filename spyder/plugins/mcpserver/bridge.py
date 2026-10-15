@@ -22,6 +22,7 @@ from collections.abc import Awaitable, Callable
 import itertools
 import json
 import logging
+import sys
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,29 @@ class JsonRpcPeer:
         self._pending: dict[int, asyncio.Future] = {}
         self._write_lock = asyncio.Lock()
         self._tasks: set[asyncio.Task] = set()
+
+    @classmethod
+    def from_stdio(cls, handlers: dict[str, Handler] | None = None):
+        """
+        Create a peer over this process' stdin and stdout.
+
+        This is meant for subprocesses started by Spyder. Nothing else may
+        write to stdout afterwards, so ``sys.stdout`` is redirected to stderr.
+        """
+        stdin = sys.stdin.buffer
+        stdout = sys.stdout.buffer
+        sys.stdout = sys.stderr
+
+        async def readline() -> bytes:
+            # Reading in a thread is portable, unlike connect_read_pipe on
+            # Windows
+            return await asyncio.to_thread(stdin.readline)
+
+        async def write(data: bytes) -> None:
+            stdout.write(data)
+            stdout.flush()
+
+        return cls(readline, write, handlers)
 
     # ---- Public API
     async def request(self, method: str, params: dict | None = None) -> Any:
