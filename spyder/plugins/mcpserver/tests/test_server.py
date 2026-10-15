@@ -1,0 +1,138 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright © Spyder Project Contributors
+# Licensed under the terms of the MIT License
+# (see spyder/__init__.py for details)
+
+"""Tests for the MCP server subprocess, using a real MCP client."""
+
+# Standard library imports
+import asyncio
+import os
+import sys
+
+# Third-party imports
+import pytest
+
+# Local imports
+from spyder.plugins.mcpserver.bridge import (
+    BridgeMethods,
+    JsonRpcPeer,
+    TOKEN_ENV_VAR,
+)
+from spyder.utils.misc import select_port
+
+httpx2 = pytest.importorskip("httpx2")
+pytest.importorskip("mcp")
+
+from mcp.client.session import ClientSession  # noqa: E402
+from mcp.client.streamable_http import streamable_http_client  # noqa: E402
+
+TOKEN = "test-token"
+
+TOOLS = [
+    {
+        "name": "echo",
+        "description": "Echo the text.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"text": {"type": "string"}},
+        },
+        "annotations": {"readOnlyHint": True, "destructiveHint": False},
+    }
+]
+
+
+async def start_server():
+    """Start the server subprocess with a fake Spyder end of the bridge."""
+    env = dict(os.environ, **{TOKEN_ENV_VAR: TOKEN})
+    process = await asyncio.create_subprocess_exec(
+        sys.executable, "-m", "spyder.plugins.mcpserver.server",
+        "--port", str(select_port(default_port=18768)),
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        env=env,
+    )
+    ready = asyncio.get_running_loop().create_future()
+
+    async def write(data):
+        process.stdin.write(data)
+        await process.stdin.drain()
+
+    async def list_tools(params):
+        return TOOLS
+
+    async def call_tool(params):
+        text = params["arguments"]["text"]
+        if text == "fail":
+            raise RuntimeError("Tool failed")
+        return {
+            "content": [
+                {"type": "text", "text": text},
+                {"type": "image", "data": "iVBORw0KGgo=",
+                 "mimeType": "image/png"},
+            ],
+            "isError": False,
+        }
+
+    async def server_ready(params):
+        ready.set_result(params["url"])
+
+    peer = JsonRpcPeer(
+        process.stdout.readline,
+        write,
+        {
+            BridgeMethods.ListTools: list_tools,
+            BridgeMethods.CallTool: call_tool,
+            BridgeMethods.ServerReady: server_ready,
+        },
+    )
+    peer_task = asyncio.create_task(peer.run())
+    url = await asyncio.wait_for(ready, 30)
+    return process, peer_task, url
+
+
+def test_server():
+    """Test listing and calling tools, and auth, through the server."""
+
+    async def run():
+        process, peer_task, url = await start_server()
+
+        try:
+            # Requests without the token are rejected
+            async with httpx2.AsyncClient() as http:
+                response = await http.post(url, json={})
+                assert response.status_code == 401
+
+            headers = {"Authorization": f"Bearer {TOKEN}"}
+            async with httpx2.AsyncClient(headers=headers) as http:
+                async with streamable_http_client(
+                    url, http_client=http
+                ) as streams:
+                    read, write = streams[0], streams[1]
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+
+                        result = await session.list_tools()
+                        assert [t.name for t in result.tools] == ["echo"]
+                        assert result.tools[0].annotations.read_only_hint
+
+                        result = await session.call_tool(
+                            "echo", {"text": "hello"}
+                        )
+                        assert not result.is_error
+                        assert result.content[0].text == "hello"
+                        assert result.content[1].type == "image"
+
+                        result = await session.call_tool(
+                            "echo", {"text": "fail"}
+                        )
+                        assert result.is_error
+                        assert "Tool failed" in result.content[0].text
+        finally:
+            # The server exits when its stdin is closed
+            process.stdin.close()
+            assert await asyncio.wait_for(process.wait(), 10) == 0
+            await peer_task
+
+    asyncio.run(run())

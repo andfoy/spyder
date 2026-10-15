@@ -389,6 +389,7 @@ spyder_plugins_entry_points = [
     'ipython_console = spyder.plugins.ipythonconsole.plugin:IPythonConsole',
     'layout = spyder.plugins.layout.plugin:Layout',
     'main_interpreter = spyder.plugins.maininterpreter.plugin:MainInterpreter',
+    'mcp_server = spyder.plugins.mcpserver.plugin:MCPServer',
     'mainmenu = spyder.plugins.mainmenu.plugin:MainMenu',
     'onlinehelp = spyder.plugins.onlinehelp.plugin:OnlineHelp',
     'outline_explorer = spyder.plugins.outlineexplorer.plugin:OutlineExplorer',
