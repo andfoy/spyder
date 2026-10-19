@@ -684,6 +684,16 @@
   ],
   "project_explorer": [
     {
+      "name": "close_project",
+      "description": "Close the project open in Spyder, after the user confirms it. The agent sessions of the project (not yours) are closed too.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "readOnly": false,
+      "destructive": true
+    },
+    {
       "name": "get_active_project",
       "description": "Get the root directory of the project open in Spyder, or null if there's none.",
       "inputSchema": {
@@ -692,6 +702,24 @@
       },
       "readOnly": true,
       "destructive": false
+    },
+    {
+      "name": "open_project",
+      "description": "Open a folder as the project in Spyder, after the user confirms it. If it isn't a Spyder project yet, it becomes one.\n\nOpening a project restarts all of Spyder's IPython consoles (yours too), so the variables, imports and figures in them are lost, and closes the agent sessions of the project that was open (not yours). Ask the user before if it's not clear they want it.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path of the folder."
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "readOnly": false,
+      "destructive": true
     }
   ],
   "workingdir": [

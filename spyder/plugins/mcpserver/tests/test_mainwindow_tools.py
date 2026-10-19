@@ -10,6 +10,7 @@ IPython console), in a full Spyder window.
 """
 
 # Standard library imports
+from concurrent.futures import Future
 import json
 import os.path as osp
 
@@ -20,7 +21,7 @@ from qtpy.QtWidgets import QApplication
 
 # Local imports
 from spyder.api.plugin_registration.registry import PLUGIN_REGISTRY
-from spyder.api.plugins.exposed import Caller, calling_as
+from spyder.api.plugins.exposed import CallContext, Caller, calling_as
 from spyder.config.manager import CONF
 from spyder.plugins.ipythonconsole.tests.conftest import SHELL_TIMEOUT
 from spyder.plugins.mcpserver.api import ToolCall
@@ -397,6 +398,84 @@ def test_server_kept_for_plugins(main_window, tools, qtbot):
     mcp_server.set_conf("enabled", False)
     qtbot.wait(2000)
     assert mcp_server.is_server_running()
+
+
+class AnsweringContext(CallContext):
+    """Call context of a client whose user answers with ``answer``."""
+
+    can_ask_user = True
+
+    def __init__(self, answer):
+        self.answer = answer
+        self.questions = []
+
+    def ask_user(self, message, choices, title=""):
+        self.questions.append((message, choices))
+        future = Future()
+        future.set_result(
+            next(choice for choice in choices if self.answer in choice)
+        )
+        return future
+
+
+def test_project_tools(main_window, tools, qtbot, tmp_path):
+    """Agents open and close projects after the user confirms it."""
+    mcp_server = main_window.get_plugin("mcp_server")
+    projects = main_window.get_plugin("project_explorer")
+    mcp_server.register_client("agent-1", "Agent 1")
+    mcp_server.register_client("agent-2", "Agent 2")
+    agent = Caller("agent-1", "Agent 1")
+    folder = tmp_path / "analysis"
+    folder.mkdir()
+
+    # It needs the user's confirmation
+    with calling_as(agent):
+        content, is_error = call_tool(
+            qtbot, tools["open_project"], path=str(folder)
+        )
+    assert is_error
+    assert "confirmation" in content[0]["text"]
+
+    declining = AnsweringContext("Don't")
+    with calling_as(agent, declining):
+        content, is_error = call_tool(
+            qtbot, tools["open_project"], path=str(folder)
+        )
+    assert is_error
+    assert projects.get_active_project_path() is None
+
+    # The folder becomes a project
+    accepting = AnsweringContext("Open")
+    with calling_as(agent, accepting):
+        result = call_tool_json(
+            qtbot, tools["open_project"], path=str(folder)
+        )
+    assert result == {"project": str(folder), "created": True}
+    message = accepting.questions[0][0]
+    assert message.startswith("Agent 1 wants to open")
+    assert "restarts all IPython consoles" in message
+    assert projects.get_active_project_path() == str(folder)
+
+    # Other agents are told, but not the one that did it
+    notes = mcp_server._dispatcher.take_notes("agent-2")
+    assert len(notes) == 1
+    assert notes[0].startswith(f"Agent 1 opened the project {folder}")
+    assert mcp_server._dispatcher.take_notes("agent-1") == []
+
+    with calling_as(agent):
+        sessions = call_tool_json(qtbot, tools["list_agent_sessions"])
+    assert sessions == [
+        {"name": "Agent 1", "you": True, "busy": False},
+        {"name": "Agent 2", "you": False, "busy": False},
+    ]
+
+    with calling_as(agent, AnsweringContext("Close")):
+        result = call_tool_json(qtbot, tools["close_project"])
+    assert result == {"project": str(folder)}
+    assert projects.get_active_project_path() is None
+    assert mcp_server._dispatcher.take_notes("agent-2") == [
+        f"Agent 1 closed the project {folder}."
+    ]
 
 
 def test_diagnostics(main_window, tools, qtbot, tmp_path):
