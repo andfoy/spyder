@@ -24,19 +24,28 @@ from typing import Any
 
 # Local imports
 from spyder.api.plugins.exposed import Caller, ExposedCallError, calling_as
-from spyder.plugins.mcpserver.api import Content, MCPTool, text_content
+from spyder.plugins.mcpserver.api import (
+    CallContext,
+    Content,
+    MCPTool,
+    text_content,
+)
 from spyder.plugins.mcpserver.focus import call_tool_keeping_focus
 
 logger = logging.getLogger(__name__)
 
 OnDone = Callable[[list[Content], bool], None]
 
-ArgumentAsker = Callable[[Caller, MCPTool], Any]
+ArgumentAsker = Callable[[Caller, MCPTool, CallContext], Any]
 """
 Function that asks the user for the value of an argument of a tool call
 from a client. It returns the value, a future resolved with it, or ``None``
 (or a future resolved with ``None``) to call the tool without it. It can
 raise (or resolve with) an :class:`ExposedCallError` to cancel the call.
+
+The :class:`CallContext` lets it ask the question through the client (e.g.
+in the agent's interface, where the user is looking) when the client
+supports it, or report that the call is waiting for the user.
 """
 
 
@@ -100,11 +109,15 @@ class ToolDispatcher:
         arguments: dict,
         client: dict | None,
         on_done: OnDone,
+        context: CallContext | None = None,
     ) -> None:
         """
         Call tool ``name`` from ``client`` (a dict with its ``id`` and
         ``name``, or ``None``) in the main Qt thread.
+
+        ``context`` lets askers reach the client while the call runs.
         """
+        context = context or CallContext()
         tool = self._get_tools().get(name)
         if tool is None:
             on_done([text_content(f"Unknown tool: {name}")], True)
@@ -134,9 +147,11 @@ class ToolDispatcher:
             elif argument in self._askers and not tool.read_only:
                 to_ask.append(argument)
 
-        self._ask(tool, caller, arguments, to_ask, on_done)
+        self._ask(tool, caller, arguments, to_ask, on_done, context)
 
-    def _ask(self, tool, caller, arguments, to_ask, on_done) -> None:
+    def _ask(
+        self, tool, caller, arguments, to_ask, on_done, context
+    ) -> None:
         if not to_ask:
             with calling_as(caller):
                 call_tool_keeping_focus(tool, arguments, on_done)
@@ -147,7 +162,7 @@ class ToolDispatcher:
         def got(value):
             if value is not None:
                 arguments[argument] = value
-            self._ask(tool, caller, arguments, to_ask[1:], on_done)
+            self._ask(tool, caller, arguments, to_ask[1:], on_done, context)
 
         def failed(error):
             if isinstance(error, ExposedCallError):
@@ -162,7 +177,7 @@ class ToolDispatcher:
                 )
 
         try:
-            result = self._askers[argument](caller, tool)
+            result = self._askers[argument](caller, tool, context)
         except Exception as error:
             failed(error)
             return

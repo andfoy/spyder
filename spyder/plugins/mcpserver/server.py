@@ -30,6 +30,7 @@ import hmac
 import logging
 import os
 import sys
+import uuid
 
 # Third-party imports
 import mcp.types as types
@@ -119,6 +120,20 @@ def get_client(ctx) -> dict | None:
     return None
 
 
+def can_ask_user(ctx) -> bool:
+    """
+    Whether the client of a request can ask its user (it supports form
+    elicitation and can receive requests now).
+    """
+    session = getattr(ctx, "session", None)
+    capabilities = getattr(session, "client_capabilities", None)
+    return bool(
+        capabilities is not None
+        and getattr(capabilities, "elicitation", None) is not None
+        and getattr(session, "can_send_request", False)
+    )
+
+
 def create_mcp_server(peer: JsonRpcPeer) -> Server:
     """Create the MCP server forwarding tools to Spyder through ``peer``."""
 
@@ -128,7 +143,14 @@ def create_mcp_server(peer: JsonRpcPeer) -> Server:
             tools=[types.Tool.model_validate(tool) for tool in tools]
         )
 
+    # Contexts of the tool calls running, so Spyder can ask their client's
+    # user or report progress while they run
+    calls: dict[str, object] = {}
+    progress: dict[str, int] = {}
+
     async def on_call_tool(ctx, params) -> types.CallToolResult:
+        call_id = uuid.uuid4().hex
+        calls[call_id] = ctx
         try:
             result = await peer.request(
                 BridgeMethods.CallTool,
@@ -136,6 +158,8 @@ def create_mcp_server(peer: JsonRpcPeer) -> Server:
                     "name": params.name,
                     "arguments": params.arguments or {},
                     "client": get_client(ctx),
+                    "callId": call_id,
+                    "canAskUser": can_ask_user(ctx),
                 },
             )
         except BridgeError as error:
@@ -143,11 +167,52 @@ def create_mcp_server(peer: JsonRpcPeer) -> Server:
                 content=[types.TextContent(type="text", text=str(error))],
                 is_error=True,
             )
+        finally:
+            calls.pop(call_id, None)
+            progress.pop(call_id, None)
 
         return types.CallToolResult(
             content=[to_content(item) for item in result["content"]],
             is_error=result.get("isError", False),
         )
+
+    async def on_ask_user(params: dict) -> dict:
+        """
+        Ask the user of the client that made a tool call to choose one of
+        ``choices`` (an elicitation form).
+        """
+        ctx = calls.get(params["callId"])
+        if ctx is None or not can_ask_user(ctx):
+            return {"action": "cancel", "choice": None}
+        schema = {
+            "type": "object",
+            "properties": {
+                "choice": {
+                    "type": "string",
+                    "title": params.get("title") or "Choice",
+                    "enum": params["choices"],
+                }
+            },
+            "required": ["choice"],
+        }
+        result = await ctx.session.elicit_form(
+            params["message"], schema, related_request_id=ctx.request_id
+        )
+        content = result.content or {}
+        return {"action": result.action, "choice": content.get("choice")}
+
+    async def on_report_progress(params: dict) -> None:
+        """Report progress of a tool call, if its client asked for it."""
+        ctx = calls.get(params["callId"])
+        if ctx is None:
+            return
+        step = progress[params["callId"]] = (
+            progress.get(params["callId"], 0) + 1
+        )
+        await ctx.session.report_progress(step, message=params.get("message"))
+
+    peer.set_handler(BridgeMethods.AskUser, on_ask_user)
+    peer.set_handler(BridgeMethods.ReportProgress, on_report_progress)
 
     return Server(
         "spyder",

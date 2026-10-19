@@ -52,6 +52,11 @@ class BridgeMethods:
     # Subprocess -> Spyder (notifications)
     ServerReady = "server/ready"
 
+    # Spyder -> subprocess, for a tool call that is running: ask the user of
+    # the client that made it (request) or report progress (notification)
+    AskUser = "server/askUser"
+    ReportProgress = "server/reportProgress"
+
 
 class BridgeError(Exception):
     """Error returned by the other end of the bridge."""
@@ -118,6 +123,10 @@ class JsonRpcPeer:
         return cls(readline, write, handlers)
 
     # ---- Public API
+    def set_handler(self, method: str, handler: Handler) -> None:
+        """Handle requests or notifications of ``method`` with ``handler``."""
+        self._handlers[method] = handler
+
     async def request(self, method: str, params: dict | None = None) -> Any:
         """Send a request and wait for its result."""
         msg_id = next(self._ids)

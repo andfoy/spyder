@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Callable
+from concurrent.futures import Future
 from dataclasses import dataclass, field
 import logging
 from typing import Any, Union
@@ -112,6 +113,42 @@ def _normalize_content(result: ToolResult) -> list[Content]:
 # -----------------------------------------------------------------------------
 class ToolError(Exception):
     """Raise from a tool handler to report an error to the agent."""
+
+
+class CallContext:
+    """
+    What Spyder can do with the client that made a tool call while the call
+    runs: ask its user a question (e.g. to choose a console) where they're
+    already looking, and report progress.
+
+    This base class is for calls without a client that supports it (e.g.
+    from tests): it can't ask and ignores progress.
+    """
+
+    can_ask_user: bool = False
+    """Whether the client can show the user a question (an MCP form)."""
+
+    def ask_user(
+        self, message: str, choices: list[str], title: str = ""
+    ) -> Future:
+        """
+        Ask the client's user to pick one of ``choices``.
+
+        Returns
+        -------
+        Future
+            Resolved in the main Qt thread with the choice, or ``None`` if
+            the user declined or dismissed the question.
+        """
+        future: Future = Future()
+        future.set_result(None)
+        return future
+
+    def report_progress(self, message: str) -> None:
+        """
+        Tell the client what the call is doing, e.g. waiting for the user.
+        It also keeps clients from giving up on calls that take a while.
+        """
 
 
 class ToolCall:

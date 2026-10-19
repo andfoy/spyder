@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 from collections.abc import Callable
+from concurrent.futures import Future
 import logging
 import os
 import sys
@@ -28,7 +29,7 @@ from qtpy.QtCore import QObject, Signal
 # Local imports
 from spyder.api.asyncdispatcher import AsyncDispatcher, DispatcherFuture
 from spyder.config.base import get_debug_level
-from spyder.plugins.mcpserver.api import MCPTool
+from spyder.plugins.mcpserver.api import CallContext, MCPTool
 from spyder.plugins.mcpserver.bridge import (
     BridgeMethods,
     JsonRpcPeer,
@@ -49,6 +50,9 @@ TOOL_CALL_TIMEOUT = 30 * 60
 
 class MCPServerClient(QObject):
     """Start the MCP server subprocess and route its requests to Spyder."""
+
+    _sig_resolve = Signal(object, object)
+    """Resolve a future with a value in the main Qt thread."""
 
     sig_server_ready = Signal(str)
     """
@@ -101,6 +105,9 @@ class MCPServerClient(QObject):
 
         self.exited_unexpectedly = False
         """Whether the server's last exit wasn't requested with stop."""
+
+        self._peer: JsonRpcPeer | None = None
+        self._sig_resolve.connect(self._resolve)
 
     # ---- Public API
     # -------------------------------------------------------------------------
@@ -179,6 +186,7 @@ class MCPServerClient(QObject):
                 BridgeMethods.ServerReady: self._handle_server_ready,
             },
         )
+        self._peer = peer
 
         await asyncio.gather(peer.run(), self._log_stderr(process))
         returncode = await process.wait()
@@ -231,6 +239,9 @@ class MCPServerClient(QObject):
         name = params["name"]
         arguments = params.get("arguments") or {}
         client = params.get("client")
+        context = _ServerCallContext(
+            self, params.get("callId"), bool(params.get("canAskUser"))
+        )
 
         def call_tool(done: Callable) -> None:
             logger.debug("Calling MCP tool %s(%s)", name, arguments)
@@ -241,6 +252,7 @@ class MCPServerClient(QObject):
                 lambda content, is_error: done(
                     {"content": content, "isError": is_error}
                 ),
+                context,
             )
 
         try:
@@ -249,6 +261,46 @@ class MCPServerClient(QObject):
             )
         except asyncio.TimeoutError:
             raise TimeoutError(f"Tool {name} didn't finish in time") from None
+
+    @AsyncDispatcher(loop=_MCP_LOOP)
+    async def _ask_user(
+        self,
+        call_id: str,
+        message: str,
+        choices: list[str],
+        title: str,
+        future: Future,
+    ) -> None:
+        choice = None
+        try:
+            answer = await self._peer.request(
+                BridgeMethods.AskUser,
+                {
+                    "callId": call_id,
+                    "message": message,
+                    "choices": choices,
+                    "title": title,
+                },
+            )
+            if answer.get("action") == "accept":
+                choice = answer.get("choice")
+        except Exception:
+            logger.debug("Could not ask the client's user", exc_info=True)
+        self._sig_resolve.emit(future, choice)
+
+    @AsyncDispatcher(loop=_MCP_LOOP)
+    async def _report_progress(self, call_id: str, message: str) -> None:
+        try:
+            await self._peer.notify(
+                BridgeMethods.ReportProgress,
+                {"callId": call_id, "message": message},
+            )
+        except Exception:
+            logger.debug("Could not report progress", exc_info=True)
+
+    def _resolve(self, future: Future, value) -> None:
+        if not future.done():
+            future.set_result(value)
 
     async def _run_in_qt(self, func: Callable[[Callable], None]):
         """
@@ -283,3 +335,27 @@ def _set_result(future: asyncio.Future, value) -> None:
 def _set_exception(future: asyncio.Future, error: Exception) -> None:
     if not future.done():
         future.set_exception(error)
+
+
+class _ServerCallContext(CallContext):
+    """Context of a tool call made through the MCP server subprocess."""
+
+    def __init__(
+        self, client: MCPServerClient, call_id: str | None, can_ask_user: bool
+    ) -> None:
+        self._client = client
+        self._call_id = call_id
+        self.can_ask_user = can_ask_user and call_id is not None
+
+    def ask_user(
+        self, message: str, choices: list[str], title: str = ""
+    ) -> Future:
+        if not self.can_ask_user:
+            return super().ask_user(message, choices, title)
+        future: Future = Future()
+        self._client._ask_user(self._call_id, message, choices, title, future)
+        return future
+
+    def report_progress(self, message: str) -> None:
+        if self._call_id is not None:
+            self._client._report_progress(self._call_id, message)

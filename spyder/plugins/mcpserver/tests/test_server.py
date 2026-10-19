@@ -29,6 +29,7 @@ pytest.importorskip("mcp")
 
 from mcp.client.session import ClientSession  # noqa: E402
 from mcp.client.streamable_http import streamable_http_client  # noqa: E402
+import mcp.types as types  # noqa: E402
 
 TOKEN = "test-token"
 
@@ -70,6 +71,23 @@ async def start_server():
         text = params["arguments"]["text"]
         if text == "fail":
             raise RuntimeError("Tool failed")
+        if text == "ask":
+            # Spyder asks the user of the client that made the call
+            answer = await peer.request(
+                BridgeMethods.AskUser,
+                {
+                    "callId": params["callId"],
+                    "message": "Which console?",
+                    "choices": ["Console 1/A", "New console"],
+                },
+            )
+            await peer.notify(
+                BridgeMethods.ReportProgress,
+                {"callId": params["callId"], "message": "Running"},
+            )
+            text = f"{params['canAskUser']} {answer['action']} " + str(
+                answer["choice"]
+            )
         return {
             "content": [
                 {"type": "text", "text": text},
@@ -157,6 +175,55 @@ def test_server():
             assert clients[-1] == {"id": "agent-2", "name": "Agent 2"}
         finally:
             # The server exits when its stdin is closed
+            process.stdin.close()
+            assert await asyncio.wait_for(process.wait(), 10) == 0
+            await peer_task
+
+    asyncio.run(run())
+
+
+def test_ask_user():
+    """Spyder can ask the user of the client that made a tool call."""
+
+    async def run():
+        process, peer_task, url, clients = await start_server()
+        questions = []
+
+        async def answer(context, params):
+            questions.append(params)
+            choices = params.requested_schema["properties"]["choice"]["enum"]
+            return types.ElicitResult(
+                action="accept", content={"choice": choices[1]}
+            )
+
+        async def decline(context, params):
+            return types.ElicitResult(action="decline")
+
+        try:
+            headers = {"Authorization": f"Bearer {TOKEN}"}
+            for callback, expected in [
+                (answer, "True accept New console"),
+                (decline, "True decline None"),
+                # Clients that can't show forms aren't asked
+                (None, "False cancel None"),
+            ]:
+                async with httpx2.AsyncClient(headers=headers) as http:
+                    async with streamable_http_client(
+                        url, http_client=http
+                    ) as streams:
+                        async with ClientSession(
+                            streams[0],
+                            streams[1],
+                            elicitation_callback=callback,
+                        ) as session:
+                            await session.initialize()
+                            result = await session.call_tool(
+                                "echo", {"text": "ask"}
+                            )
+                            assert result.content[0].text == expected
+
+            assert questions[0].message == "Which console?"
+        finally:
             process.stdin.close()
             assert await asyncio.wait_for(process.wait(), 10) == 0
             await peer_task

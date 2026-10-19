@@ -93,7 +93,7 @@ def test_argument_asker(dispatcher):
     asked = []
     answers = {}
 
-    def ask_console(caller, tool):
+    def ask_console(caller, tool, context):
         asked.append((caller.name, tool.name))
         return answers.get(caller.id)
 
@@ -118,7 +118,7 @@ def test_argument_asker(dispatcher):
 def test_argument_asker_future(dispatcher):
     future = Future()
     dispatcher.register_argument_asker(
-        "console_id", lambda caller, tool: future
+        "console_id", lambda caller, tool, context: future
     )
 
     # The call waits for the answer
@@ -137,7 +137,7 @@ def test_argument_asker_future(dispatcher):
 def test_busy_clients(dispatcher):
     future = Future()
     dispatcher.register_argument_asker(
-        "console_id", lambda caller, tool: future
+        "console_id", lambda caller, tool, context: future
     )
     results = call(dispatcher, "run")
     assert dispatcher.get_busy_clients() == {"agent-1"}
