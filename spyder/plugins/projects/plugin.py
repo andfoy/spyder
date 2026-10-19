@@ -21,7 +21,7 @@ from qtpy.QtCore import Signal
 # Local imports
 from spyder.api.plugin_registration.decorators import (
     on_plugin_available, on_plugin_teardown)
-from spyder.api.plugins import Plugins, SpyderDockablePlugin
+from spyder.api.plugins import Plugins, SpyderDockablePlugin, expose
 from spyder.api.translations import _
 from spyder.plugins.completion.api import WorkspaceUpdateKind
 from spyder.plugins.mainmenu.api import ApplicationMenus, ProjectsMenuSections
@@ -399,6 +399,14 @@ class Projects(SpyderDockablePlugin):
         """
         self.get_widget().set_project_filenames(filenames)
 
+    @expose(
+        name="get_active_project",
+        read_only=True,
+        description=(
+            "Get the root directory of the project open in Spyder, or null "
+            "if there's none."
+        ),
+    )
     def get_active_project_path(self):
         """Get path of the active project."""
         return self.get_widget().get_active_project_path()
