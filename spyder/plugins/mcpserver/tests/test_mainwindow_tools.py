@@ -289,6 +289,75 @@ def test_debugging_belongs_to_its_agent(main_window, tools, qtbot, tmp_path):
     assert not result["debugging"]
 
 
+def test_profiling(main_window, tools, qtbot, tmp_path):
+    """Agents can profile code and files and drill into the results."""
+    result = call_tool_json(
+        qtbot,
+        tools["profile_code"],
+        code=(
+            "def slow():\n"
+            "    return sum(i * i for i in range(300_000))\n"
+            "\n"
+            "def main():\n"
+            "    for _ in range(3):\n"
+            "        slow()\n"
+            "    print('done')\n"
+            "\n"
+            "main()"
+        ),
+    )
+    assert result["output"] == "done\n"
+    functions = {f["function"]: f for f in result["profile"]["functions"]}
+    assert functions["slow"]["calls"] == 3
+    assert not functions["slow"]["library"]
+    assert functions["<built-in method builtins.sum>"]["library"]
+
+    # The results are in the Profiler pane too
+    profiler = main_window.get_plugin("profiler")
+    shell = main_window.ipyconsole.get_current_shellwidget()
+    data_tree = profiler.get_widget().get_widget_for_shellwidget(
+        shell
+    ).data_tree
+    assert data_tree.profdata is not None
+
+    details = call_tool_json(
+        qtbot, tools["get_profile_results"], function="main"
+    )
+    (main,) = details["matches"]
+    assert [callee["function"] for callee in main["callees"]][:1] == ["slow"]
+
+    user_code = call_tool_json(
+        qtbot,
+        tools["get_profile_results"],
+        sort="total",
+        include_libraries=False,
+    )
+    assert all(not f["library"] for f in user_code["functions"])
+
+    content, is_error = call_tool(
+        qtbot, tools["get_profile_results"], function="missing"
+    )
+    assert is_error
+
+    # Files are profiled with their path, like with Run > Profile
+    filename = str(tmp_path / "profile_me.py")
+    with open(filename, "w") as f:
+        f.write(
+            "def work():\n"
+            "    return sorted(range(100_000), reverse=True)\n"
+            "\n"
+            "for _ in range(5):\n"
+            "    work()\n"
+        )
+    result = call_tool_json(
+        qtbot, tools["profile_file"], filename=filename
+    )
+    functions = {f["function"]: f for f in result["profile"]["functions"]}
+    assert functions["work"]["calls"] == 5
+    assert osp.normcase(functions["work"]["file"]) == osp.normcase(filename)
+    assert not functions["work"]["library"]
+
+
 def test_diagnostics(main_window, tools, qtbot, tmp_path):
     filename = str(tmp_path / "lint_me.py")
     with open(filename, "w") as f:

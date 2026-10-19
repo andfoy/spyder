@@ -556,6 +556,120 @@
       "destructive": false
     }
   ],
+  "profiler": [
+    {
+      "name": "get_profile_results",
+      "description": "Get the results of the last profiling in an IPython console (by the user or with profile_code or profile_file): the functions where it spent the most time or, for one function, the functions that called it and the ones it called, with the time spent through each.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "console_id": {
+            "type": "string",
+            "description": "Id of the console, as returned by list_consoles. By default, the console currently selected in Spyder."
+          },
+          "function": {
+            "type": "string",
+            "description": "Function to get the callers and callees of, by name (e.g. `solve`) or location (e.g. `model.py:42`)."
+          },
+          "sort": {
+            "enum": [
+              "local",
+              "total",
+              "calls"
+            ],
+            "type": "string",
+            "description": "Sort functions by `local` time (spent in the function itself), `total` time (including the functions it called) or number of `calls`.",
+            "default": "local"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of functions.",
+            "default": 20
+          },
+          "include_libraries": {
+            "type": "boolean",
+            "description": "Whether to include functions from libraries, the standard library and built-ins, or only the user's code.",
+            "default": true
+          }
+        }
+      },
+      "readOnly": true,
+      "destructive": false
+    },
+    {
+      "name": "profile_code",
+      "description": "Profile Python code in an IPython console and get its output and the functions where it spent the most time, measured with cProfile. The results are also shown in Spyder's Profiler pane. Use get_profile_results to see the callers and callees of a function.\n\nThe code runs like with execute_code: in the user's live kernel, waiting for the console to be free, and slower than usual because of the profiling.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Python code to profile."
+          },
+          "console_id": {
+            "type": "string",
+            "description": "Id of the console, as returned by list_consoles. By default, the console currently selected in Spyder."
+          },
+          "timeout": {
+            "type": "number",
+            "description": "Seconds to wait for the console to be free and the code to finish. If it doesn't finish in time, use get_profile_results once it does.",
+            "default": 60
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of functions in the results.",
+            "default": 20
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "readOnly": false,
+      "destructive": false
+    },
+    {
+      "name": "profile_file",
+      "description": "Profile a Python file in an IPython console, like Run > Profile in Spyder, and get its output and the functions where it spent the most time. If the file is open in the Editor, its current contents run, including unsaved changes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "Absolute path of the file."
+          },
+          "args": {
+            "type": "string",
+            "description": "Command line arguments for the file.",
+            "default": ""
+          },
+          "wdir": {
+            "type": "string",
+            "description": "Working directory to run the file in. By default, the file's directory."
+          },
+          "console_id": {
+            "type": "string",
+            "description": "Id of the console, as returned by list_consoles. By default, the console currently selected in Spyder."
+          },
+          "timeout": {
+            "type": "number",
+            "description": "Seconds to wait for the console to be free and the file to finish. If it doesn't finish in time, use get_profile_results once it does.",
+            "default": 60
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of functions in the results.",
+            "default": 20
+          }
+        },
+        "required": [
+          "filename"
+        ]
+      },
+      "readOnly": false,
+      "destructive": false
+    }
+  ],
   "project_explorer": [
     {
       "name": "get_active_project",
