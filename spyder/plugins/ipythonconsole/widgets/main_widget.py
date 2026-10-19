@@ -2241,7 +2241,10 @@ class IPythonConsoleWidget(PluginMainWidget, CachedKernelMixin):  # noqa: PLR090
 
         # Connect to working directory
         shellwidget.sig_working_directory_changed.connect(
-            self.on_working_directory_changed)
+            functools.partial(
+                self._on_shellwidget_working_directory_changed, shellwidget
+            )
+        )
 
         # Connect client execution state to be reflected in the interface
         client.sig_execution_state_changed.connect(self.update_actions)
@@ -2818,21 +2821,23 @@ class IPythonConsoleWidget(PluginMainWidget, CachedKernelMixin):  # noqa: PLR090
         if shellwidget is not None:
             shellwidget.set_cwd(directory)
 
+    def _on_shellwidget_working_directory_changed(
+        self, shellwidget, dirname, server_id
+    ):
+        """
+        The working directory of a console changed. Only the current
+        console's changes Spyder's: other consoles (e.g. running code in the
+        background) don't, and theirs is applied when they become the
+        current one (see refresh_container).
+        """
+        if shellwidget is self.get_current_shellwidget():
+            self.on_working_directory_changed(dirname, server_id)
+
     def on_working_directory_changed(self, dirname, server_id):
         """
         Notify that the working directory was changed in the current console
         to other plugins.
         """
-        # Other consoles (e.g. running code in the background) don't change
-        # Spyder's working directory. Theirs is applied when they become the
-        # current console (see refresh_container).
-        sender = self.sender()
-        if (
-            isinstance(sender, ShellWidget)
-            and sender is not self.get_current_shellwidget()
-        ):
-            return
-
         logger.debug(f"Changing working directory: {server_id} - {dirname}")
         if dirname:
             self.sig_current_directory_changed.emit(dirname, server_id)
