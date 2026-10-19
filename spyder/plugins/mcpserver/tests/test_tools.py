@@ -9,6 +9,7 @@
 # Standard library imports
 import base64
 import json
+import sys
 
 # Third-party imports
 import pytest
@@ -209,7 +210,9 @@ def test_inspect_variable(ipyconsole, tools, qtbot):
 
     summary, _ = call_tool_json(qtbot, tools["inspect_variable"], name="df")
     assert summary["shape"] == [3, 2]
-    assert summary["columns"] == {"a": "float64", "b": "object"}
+    # pandas 3 gives string columns their own dtype
+    assert summary["columns"]["a"] == "float64"
+    assert summary["columns"]["b"] in ("object", "str")
     assert summary["missing_values"] == {"a": 1}
     assert "x" in summary["head"]
 
@@ -321,7 +324,10 @@ def test_breakpoint_and_pdb_commands(ipyconsole, tools, qtbot):
     result = run_pdb("p x")
     assert result["output"] == "3"
     assert result["debugging"]
-    assert result["location"]["line"] == 3
+    # Since Python 3.13, breakpoint() stops on its own line instead of the
+    # next one
+    line = 3 if sys.version_info >= (3, 13) else 4
+    assert result["location"]["line"] == line
 
     # Running code is refused while debugging
     content, is_error = call_tool(qtbot, tools["execute_code"], code="1")
