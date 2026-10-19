@@ -27,7 +27,7 @@ from qtpy.QtCore import QObject, Signal
 # Local imports
 from spyder.api.asyncdispatcher import AsyncDispatcher, DispatcherFuture
 from spyder.config.base import get_debug_level
-from spyder.plugins.mcpserver.api import MCPTool, ToolCall
+from spyder.plugins.mcpserver.api import MCPTool
 from spyder.plugins.mcpserver.bridge import (
     BridgeMethods,
     JsonRpcPeer,
@@ -66,9 +66,26 @@ class MCPServerClient(QObject):
         Exit code of the process.
     """
 
-    def __init__(self, parent, tools: dict[str, MCPTool]) -> None:
+    def __init__(
+        self,
+        parent,
+        get_tools: Callable[[], dict[str, MCPTool]],
+        call_tool: Callable[[str, dict, dict | None, Callable], None],
+    ) -> None:
+        """
+        Parameters
+        ----------
+        get_tools: Callable
+            Function that returns the tools available to agents, by name. It's
+            called in the main Qt thread for every request.
+        call_tool: Callable
+            Function called in the main Qt thread with the ``name``,
+            ``arguments`` and ``client`` of a tool call, and a function to
+            call with ``(content, is_error)`` when it finishes.
+        """
         super().__init__(parent)
-        self._tools = tools
+        self._get_tools = get_tools
+        self._call_tool = call_tool
         self._process: asyncio.subprocess.Process | None = None
         self.url: str | None = None
 
@@ -171,27 +188,24 @@ class MCPServerClient(QObject):
     async def _handle_list_tools(self, params: dict) -> list[dict]:
         return await self._run_in_qt(
             lambda done: done(
-                [tool.to_dict() for tool in self._tools.values()]
+                [tool.to_dict() for tool in self._get_tools().values()]
             )
         )
 
     async def _handle_call_tool(self, params: dict) -> dict:
         name = params["name"]
         arguments = params.get("arguments") or {}
+        client = params.get("client")
 
         def call_tool(done: Callable) -> None:
-            tool = self._tools.get(name)
-            if tool is None:
-                raise ValueError(f"Unknown tool: {name}")
-
             logger.debug("Calling MCP tool %s(%s)", name, arguments)
-            tool.call(
-                ToolCall(
-                    arguments,
-                    lambda content, is_error: done(
-                        {"content": content, "isError": is_error}
-                    ),
-                )
+            self._call_tool(
+                name,
+                arguments,
+                client,
+                lambda content, is_error: done(
+                    {"content": content, "isError": is_error}
+                ),
             )
 
         try:

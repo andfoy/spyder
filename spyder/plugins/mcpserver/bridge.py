@@ -35,6 +35,13 @@ TOKEN_ENV_VAR = "SPYDER_MCP_TOKEN"
 
 # ---- Bridge methods
 # -----------------------------------------------------------------------------
+# HTTP headers clients send to say who they are, e.g. each agent session
+# started from Spyder. Clients without them are identified by their MCP
+# session.
+CLIENT_ID_HEADER = "X-Spyder-Client-Id"
+CLIENT_NAME_HEADER = "X-Spyder-Client-Name"
+
+
 class BridgeMethods:
     """Methods exchanged between Spyder and the MCP server subprocess."""
 

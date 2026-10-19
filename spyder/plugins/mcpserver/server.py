@@ -38,6 +38,8 @@ import uvicorn
 
 # Local imports
 from spyder.plugins.mcpserver.bridge import (
+    CLIENT_ID_HEADER,
+    CLIENT_NAME_HEADER,
     BridgeError,
     BridgeMethods,
     JsonRpcPeer,
@@ -98,6 +100,25 @@ def to_content(item: dict) -> types.ContentBlock:
     return types.TextContent(type="text", text=item.get("text", ""))
 
 
+def get_client(ctx) -> dict | None:
+    """Identify the client of a request from its HTTP headers."""
+    headers = getattr(getattr(ctx, "request", None), "headers", None)
+    if headers is None:
+        return None
+
+    client_id = headers.get(CLIENT_ID_HEADER)
+    if client_id:
+        return {
+            "id": client_id,
+            "name": headers.get(CLIENT_NAME_HEADER) or client_id,
+        }
+
+    session_id = headers.get("mcp-session-id")
+    if session_id:
+        return {"id": f"mcp-session:{session_id}", "name": "External agent"}
+    return None
+
+
 def create_mcp_server(peer: JsonRpcPeer) -> Server:
     """Create the MCP server forwarding tools to Spyder through ``peer``."""
 
@@ -111,7 +132,11 @@ def create_mcp_server(peer: JsonRpcPeer) -> Server:
         try:
             result = await peer.request(
                 BridgeMethods.CallTool,
-                {"name": params.name, "arguments": params.arguments or {}},
+                {
+                    "name": params.name,
+                    "arguments": params.arguments or {},
+                    "client": get_client(ctx),
+                },
             )
         except BridgeError as error:
             return types.CallToolResult(

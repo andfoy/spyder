@@ -16,6 +16,8 @@ import pytest
 
 # Local imports
 from spyder.plugins.mcpserver.bridge import (
+    CLIENT_ID_HEADER,
+    CLIENT_NAME_HEADER,
     BridgeMethods,
     JsonRpcPeer,
     TOKEN_ENV_VAR,
@@ -54,6 +56,7 @@ async def start_server():
         env=env,
     )
     ready = asyncio.get_running_loop().create_future()
+    clients = []
 
     async def write(data):
         process.stdin.write(data)
@@ -63,6 +66,7 @@ async def start_server():
         return TOOLS
 
     async def call_tool(params):
+        clients.append(params.get("client"))
         text = params["arguments"]["text"]
         if text == "fail":
             raise RuntimeError("Tool failed")
@@ -89,14 +93,14 @@ async def start_server():
     )
     peer_task = asyncio.create_task(peer.run())
     url = await asyncio.wait_for(ready, 30)
-    return process, peer_task, url
+    return process, peer_task, url, clients
 
 
 def test_server():
     """Test listing and calling tools, and auth, through the server."""
 
     async def run():
-        process, peer_task, url = await start_server()
+        process, peer_task, url, clients = await start_server()
 
         try:
             # Requests without the token are rejected
@@ -129,6 +133,28 @@ def test_server():
                         )
                         assert result.is_error
                         assert "Tool failed" in result.content[0].text
+
+            # Clients without their own id are told apart by MCP session
+            assert clients[0]["id"].startswith("mcp-session:")
+            assert clients[0]["name"] == "External agent"
+
+            # Clients started by Spyder say who they are
+            headers.update(
+                {
+                    CLIENT_ID_HEADER: "agent-2",
+                    CLIENT_NAME_HEADER: "Agent 2",
+                }
+            )
+            async with httpx2.AsyncClient(headers=headers) as http:
+                async with streamable_http_client(
+                    url, http_client=http
+                ) as streams:
+                    async with ClientSession(
+                        streams[0], streams[1]
+                    ) as session:
+                        await session.initialize()
+                        await session.call_tool("echo", {"text": "hi"})
+            assert clients[-1] == {"id": "agent-2", "name": "Agent 2"}
         finally:
             # The server exits when its stdin is closed
             process.stdin.close()

@@ -7,9 +7,11 @@
 """
 MCP server plugin.
 
-Exposes tools contributed by Spyder plugins to AI agents (e.g. Claude Code)
-through the Model Context Protocol. The HTTP server runs in a subprocess,
-which forwards tool calls to this plugin.
+Exposes to AI agents, through the Model Context Protocol,
+the methods that plugins mark with :func:`spyder.api.plugins.expose`. Other
+plugins don't depend on this one: it collects the exposed methods of every
+plugin as they become available. The HTTP server runs in a subprocess, which
+forwards tool calls to this plugin.
 """
 
 # Standard library imports
@@ -26,14 +28,18 @@ from spyder.api.plugin_registration.decorators import (
     on_plugin_available,
     on_plugin_teardown,
 )
+from spyder.api.plugin_registration.registry import PLUGIN_REGISTRY
 from spyder.api.translations import _
 from spyder.plugins.mainmenu.api import ApplicationMenus, ToolsMenuSections
 from spyder.plugins.mcpserver.api import MCPTool
+from spyder.plugins.mcpserver.bridge import CLIENT_ID_HEADER, CLIENT_NAME_HEADER
 from spyder.plugins.mcpserver.client import MCPServerClient
 from spyder.plugins.mcpserver.container import (
     MCPServerActions,
     MCPServerContainer,
 )
+from spyder.plugins.mcpserver.dispatcher import ArgumentAsker, ToolDispatcher
+from spyder.plugins.mcpserver.exposed import tools_from_plugin
 from spyder.utils.misc import select_port
 
 logger = logging.getLogger(__name__)
@@ -43,12 +49,7 @@ class MCPServer(SpyderPluginV2):
     """MCP server plugin."""
 
     NAME = "mcp_server"
-    OPTIONAL = [
-        Plugins.Editor,
-        Plugins.IPythonConsole,
-        Plugins.MainMenu,
-        Plugins.Plots,
-    ]
+    OPTIONAL = [Plugins.MainMenu]
     CONTAINER_CLASS = MCPServerContainer
     CONF_SECTION = NAME
     CONF_FILE = False
@@ -85,9 +86,15 @@ class MCPServer(SpyderPluginV2):
 
     def on_initialize(self):
         self._tools: dict[str, MCPTool] = {}
-        self._tools_by_plugin: dict[str, list[str]] = {}
 
-        self._client = MCPServerClient(self, self._tools)
+        # Tool names and plugin instance of each plugin whose exposed
+        # methods were collected
+        self._collected: dict[str, tuple[list[str], int]] = {}
+
+        self._dispatcher = ToolDispatcher(self._get_available_tools)
+        self._client = MCPServerClient(
+            self, self._get_available_tools, self._dispatcher.call
+        )
         self._client.sig_server_ready.connect(self._on_server_ready)
         self._client.sig_server_stopped.connect(self._on_server_stopped)
 
@@ -95,11 +102,19 @@ class MCPServer(SpyderPluginV2):
         container.sig_enabled_changed.connect(self._on_enabled_changed)
         container.sig_copy_command_requested.connect(self.copy_command)
 
+        PLUGIN_REGISTRY.sig_plugin_ready.connect(self._on_plugin_ready)
+        self._collect_available_plugins()
+
     def on_mainwindow_visible(self):
+        self._collect_available_plugins()
         if self.get_conf("enabled"):
             self.start_server()
 
     def on_close(self, cancelable=False):
+        try:
+            PLUGIN_REGISTRY.sig_plugin_ready.disconnect(self._on_plugin_ready)
+        except (TypeError, RuntimeError):
+            pass
         self.stop_server()
 
     @on_plugin_available(plugin=Plugins.MainMenu)
@@ -128,41 +143,6 @@ class MCPServer(SpyderPluginV2):
                 action_id, menu_id=ApplicationMenus.Tools
             )
 
-    @on_plugin_available(plugin=Plugins.IPythonConsole)
-    def on_ipython_console_available(self):
-        from spyder.plugins.mcpserver.tools import ipythonconsole
-
-        ipyconsole = self.get_plugin(Plugins.IPythonConsole)
-        self._register_tools(
-            Plugins.IPythonConsole, ipythonconsole.get_tools(ipyconsole)
-        )
-        self._register_plots_tools()
-
-    @on_plugin_teardown(plugin=Plugins.IPythonConsole)
-    def on_ipython_console_teardown(self):
-        self._unregister_tools(Plugins.IPythonConsole)
-        self._unregister_tools(Plugins.Plots)
-
-    @on_plugin_available(plugin=Plugins.Plots)
-    def on_plots_available(self):
-        self._register_plots_tools()
-
-    @on_plugin_teardown(plugin=Plugins.Plots)
-    def on_plots_teardown(self):
-        self._unregister_tools(Plugins.Plots)
-
-    @on_plugin_available(plugin=Plugins.Editor)
-    def on_editor_available(self):
-        from spyder.plugins.mcpserver.tools import editor
-
-        self._register_tools(
-            Plugins.Editor, editor.get_tools(self.get_plugin(Plugins.Editor))
-        )
-
-    @on_plugin_teardown(plugin=Plugins.Editor)
-    def on_editor_teardown(self):
-        self._unregister_tools(Plugins.Editor)
-
     # ---- Public API
     # -------------------------------------------------------------------------
     def register_tool(self, tool: MCPTool) -> None:
@@ -183,8 +163,56 @@ class MCPServer(SpyderPluginV2):
         self._tools.pop(name, None)
 
     def get_tools(self) -> list[MCPTool]:
-        """Return the registered tools."""
-        return list(self._tools.values())
+        """Return the tools available to agents."""
+        return list(self._get_available_tools().values())
+
+    def get_clients(self) -> list:
+        """
+        Return the clients (e.g. agent sessions) that have called
+        tools, as :class:`spyder.api.plugins.Caller` objects.
+        """
+        return self._dispatcher.get_clients()
+
+    def set_client_argument(self, client_id: str, name: str, value) -> None:
+        """
+        Set the value of a tool argument used by default when a client
+        doesn't give it, e.g. ``console_id`` for the console an agent session
+        works in. ``None`` removes it.
+
+        Parameters
+        ----------
+        client_id: str
+            Id of the client, as sent in the ``X-Spyder-Client-Id`` header.
+        name: str
+            Name of the argument.
+        value: Any
+            Its value, or ``None`` to remove it.
+        """
+        self._dispatcher.set_client_argument(client_id, name, value)
+
+    def get_client_argument(self, client_id: str, name: str):
+        """Return the default value of a tool argument for a client."""
+        return self._dispatcher.get_client_argument(client_id, name)
+
+    def get_busy_clients(self) -> set:
+        """
+        Return the ids of the clients with tool calls running, e.g. to ask
+        the user before closing an agent session that is working.
+        """
+        return self._dispatcher.get_busy_clients()
+
+    def register_argument_asker(
+        self, name: str, asker: ArgumentAsker | None
+    ) -> None:
+        """
+        Set a function that asks the user for the value of a tool argument
+        when a client calls a tool that changes state without giving it and
+        without a default (e.g. which console an agent session should
+        run code in). ``None`` removes it.
+
+        See :data:`spyder.plugins.mcpserver.dispatcher.ArgumentAsker`.
+        """
+        self._dispatcher.register_argument_asker(name, asker)
 
     def start_server(self) -> None:
         """Start the MCP server subprocess."""
@@ -217,10 +245,23 @@ class MCPServer(SpyderPluginV2):
         """Return the URL of the MCP endpoint if the server is running."""
         return self._client.url
 
-    def get_connection_info(self) -> dict | None:
+    def get_connection_info(
+        self,
+        client_id: str | None = None,
+        client_name: str | None = None,
+    ) -> dict | None:
         """
         Return the information needed to connect to the server, or ``None``
         if it's not running.
+
+        Parameters
+        ----------
+        client_id: str, optional
+            Unique id of the client (e.g. an agent session), sent with its
+            tool calls so tools can tell clients apart. Clients without one
+            are identified by their MCP session.
+        client_name: str, optional
+            Name of the client shown to users, e.g. ``Agent 2``.
 
         Returns
         -------
@@ -230,13 +271,16 @@ class MCPServer(SpyderPluginV2):
         url = self.get_url()
         if url is None:
             return None
-        return {
-            "url": url,
-            "headers": {"Authorization": f"Bearer {self.get_conf('token')}"},
-        }
+
+        headers = {"Authorization": f"Bearer {self.get_conf('token')}"}
+        if client_id is not None:
+            headers[CLIENT_ID_HEADER] = client_id
+            if client_name is not None:
+                headers[CLIENT_NAME_HEADER] = client_name
+        return {"url": url, "headers": headers}
 
     def get_command(self) -> str | None:
-        """Return the Claude Code command to add Spyder as an MCP server."""
+        """Return a command line that adds Spyder's MCP server to an agent."""
         info = self.get_connection_info()
         if info is None:
             return None
@@ -246,38 +290,64 @@ class MCPServer(SpyderPluginV2):
         )
 
     def copy_command(self) -> None:
-        """Copy the command to add Spyder to Claude Code to the clipboard."""
+        """Copy the command that adds Spyder to an agent to the clipboard."""
         command = self.get_command()
         if command is not None:
             QApplication.clipboard().setText(command)
 
     # ---- Private API
     # -------------------------------------------------------------------------
-    def _register_tools(self, plugin_name: str, tools: list[MCPTool]) -> None:
-        self._tools_by_plugin[plugin_name] = [tool.name for tool in tools]
-        for tool in tools:
-            self.register_tool(tool)
+    def _get_available_tools(self) -> dict[str, MCPTool]:
+        """Return the tools whose plugin is available, by name."""
+        return {
+            name: tool
+            for name, tool in self._tools.items()
+            if tool.plugin is None
+            or PLUGIN_REGISTRY.is_plugin_available(tool.plugin)
+        }
 
-    def _unregister_tools(self, plugin_name: str) -> None:
-        for name in self._tools_by_plugin.pop(plugin_name, []):
-            self.unregister_tool(name)
+    def _on_plugin_ready(self, plugin_name: str, omit_conf: bool) -> None:
+        self._collect_tools(plugin_name)
 
-    def _register_plots_tools(self) -> None:
-        """Register the Plots tools, which also need the IPython console."""
-        plots = self.get_plugin(Plugins.Plots, error=False)
-        ipyconsole = self.get_plugin(Plugins.IPythonConsole, error=False)
-        if (
-            plots is None
-            or ipyconsole is None
-            or Plugins.Plots in self._tools_by_plugin
-        ):
+    def _collect_available_plugins(self) -> None:
+        for plugin_name in list(PLUGIN_REGISTRY):
+            if PLUGIN_REGISTRY.is_plugin_available(plugin_name):
+                self._collect_tools(plugin_name)
+
+    def _collect_tools(self, plugin_name: str) -> None:
+        """Register the exposed methods of a plugin as tools."""
+        try:
+            plugin = PLUGIN_REGISTRY.get_plugin(plugin_name)
+        except Exception:
             return
 
-        from spyder.plugins.mcpserver.tools import plots as plots_tools
+        # Plugins can be recreated (e.g. after disabling and enabling them),
+        # so collect them again if their instance changed
+        names, instance_id = self._collected.get(plugin_name, ([], None))
+        if instance_id == id(plugin):
+            return
+        for name in names:
+            self.unregister_tool(name)
 
-        self._register_tools(
-            Plugins.Plots, plots_tools.get_tools(plots, ipyconsole)
-        )
+        names = []
+        for tool in tools_from_plugin(plugin, plugin_name):
+            if tool.name in self._tools:
+                logger.error(
+                    "Can't expose %s to agents from plugin %s: another "
+                    "plugin already exposes a method with that name. Use "
+                    "expose(name=...) to give it a different one.",
+                    tool.name,
+                    plugin_name,
+                )
+                continue
+            self.register_tool(tool)
+            names.append(tool.name)
+
+        self._collected[plugin_name] = (names, id(plugin))
+        if names:
+            logger.debug(
+                "Exposed to agents from %s: %s", plugin_name, ", ".join(names)
+            )
 
     def _on_enabled_changed(self, enabled: bool) -> None:
         if enabled:

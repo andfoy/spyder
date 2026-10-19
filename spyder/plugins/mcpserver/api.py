@@ -7,8 +7,10 @@
 """
 MCP server plugin API.
 
-Plugins expose functionality to AI agents by registering :class:`MCPTool`
-instances with the MCP server plugin, e.g.::
+The MCP server exposes to AI agents the plugin methods marked with
+:func:`spyder.api.plugins.expose`, so plugins usually don't need to use this
+module. It's for tools that only make sense for MCP, which can be registered
+directly with :meth:`MCPServer.register_tool`::
 
     @on_plugin_available(plugin=Plugins.MCPServer)
     def on_mcp_server_available(self):
@@ -37,10 +39,16 @@ from dataclasses import dataclass, field
 import logging
 from typing import Any, Union
 
+# Local imports
+from spyder.api.plugins.exposed import ExposedCallError
+
 logger = logging.getLogger(__name__)
 
 Content = dict
 ToolResult = Union[str, Content, list]
+
+# Maximum length of text results, to avoid filling the agent's context.
+MAX_OUTPUT_CHARS = 50000
 
 
 # ---- Content helpers
@@ -59,6 +67,36 @@ def image_content(data: bytes | str, mime_type: str = "image/png") -> Content:
     if isinstance(data, bytes):
         data = base64.b64encode(data).decode("ascii")
     return {"type": "image", "data": data, "mimeType": mime_type}
+
+
+def truncate(text: str, max_chars: int = MAX_OUTPUT_CHARS) -> str:
+    """Keep the start and end of ``text`` if it's too long."""
+    if len(text) <= max_chars:
+        return text
+
+    half = max_chars // 2
+    skipped = len(text) - 2 * half
+    return (
+        f"{text[:half]}\n\n[... {skipped} characters omitted ...]\n\n"
+        f"{text[-half:]}"
+    )
+
+
+def svg_to_png(svg: str | bytes) -> bytes:
+    """
+    Render an SVG image to PNG.
+
+    Agents can't read SVG images, so this is used to send them figures.
+    """
+    from qtconsole.svg import svg_to_image
+    from qtpy.QtCore import QBuffer, QByteArray, QIODevice
+
+    image = svg_to_image(svg)
+    data = QByteArray()
+    buffer = QBuffer(data)
+    buffer.open(QIODevice.WriteOnly)
+    image.save(buffer, "PNG")
+    return bytes(data)
 
 
 def _normalize_content(result: ToolResult) -> list[Content]:
@@ -135,6 +173,9 @@ class MCPTool:
         Whether the tool doesn't modify any state.
     destructive: bool
         Whether the tool may make changes that can't be undone.
+    plugin: str, optional
+        Name of the plugin that provides the tool. Its tools are only listed
+        while the plugin is available.
     """
 
     name: str
@@ -146,6 +187,7 @@ class MCPTool:
     title: str | None = None
     read_only: bool = False
     destructive: bool = False
+    plugin: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return the MCP tool definition sent to agents."""
@@ -166,7 +208,7 @@ class MCPTool:
         """Run the handler, finishing ``call`` if it returns a result."""
         try:
             result = self.handler(call)
-        except ToolError as error:
+        except (ToolError, ExposedCallError) as error:
             call.error(str(error))
         except Exception as error:
             logger.exception("Error running MCP tool %s", self.name)
