@@ -28,7 +28,7 @@ class MCPServerContainer(PluginMainContainer):
 
     Parameters
     ----------
-    enabled: bool
+    enabled : bool
         Whether the server is enabled.
     """
 

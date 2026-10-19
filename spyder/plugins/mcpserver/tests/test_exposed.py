@@ -49,9 +49,9 @@ class FakePlugin:
 
         Parameters
         ----------
-        name: str
+        name : str
             Who to greet.
-        times: int, optional
+        times : int, optional
             How many times
             to greet.
         loud : bool

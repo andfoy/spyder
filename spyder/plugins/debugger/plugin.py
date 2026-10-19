@@ -683,15 +683,15 @@ class Debugger(SpyderDockablePlugin, ShellConnectPluginMixin, RunExecutor):
 
         Parameters
         ----------
-        filename: str
+        filename : str
             Absolute path of the file. If it's open in the Editor, its current
             contents are debugged, including unsaved changes.
-        args: str, optional
+        args : str, optional
             Command line arguments for the file.
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by list_consoles. By default, the
             console currently selected in Spyder.
-        timeout: float, optional
+        timeout : float, optional
             Seconds to wait for the console to be free and the debugger to
             stop before returning the output collected so far.
         """
@@ -724,12 +724,12 @@ class Debugger(SpyderDockablePlugin, ShellConnectPluginMixin, RunExecutor):
 
         Parameters
         ----------
-        command: str
+        command : str
             Pdb command.
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by list_consoles. By default, the
             console currently selected in Spyder.
-        timeout: float, optional
+        timeout : float, optional
             Seconds to wait for the command to finish (e.g. ``c`` runs until
             the next breakpoint) before returning the output collected so
             far.
@@ -770,7 +770,7 @@ class Debugger(SpyderDockablePlugin, ShellConnectPluginMixin, RunExecutor):
 
         Parameters
         ----------
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by list_consoles. By default, the
             console currently selected in Spyder.
         """
@@ -821,11 +821,11 @@ class Debugger(SpyderDockablePlugin, ShellConnectPluginMixin, RunExecutor):
 
         Parameters
         ----------
-        filename: str
+        filename : str
             Absolute path of the file.
-        line: int
+        line : int
             Line number (1-based). It can't be blank or a comment.
-        condition: str, optional
+        condition : str, optional
             Python expression; the debugger only stops if it's true.
         """
         filename = osp.abspath(filename)
@@ -871,9 +871,9 @@ class Debugger(SpyderDockablePlugin, ShellConnectPluginMixin, RunExecutor):
 
         Parameters
         ----------
-        filename: str
+        filename : str
             Absolute path of the file.
-        line: int
+        line : int
             Line number (1-based) of the breakpoint.
         """
         filename = osp.abspath(filename)

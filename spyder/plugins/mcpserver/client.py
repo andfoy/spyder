@@ -60,7 +60,7 @@ class MCPServerClient(QObject):
 
     Parameters
     ----------
-    url: str
+    url : str
         URL of the MCP endpoint.
     """
 
@@ -70,7 +70,7 @@ class MCPServerClient(QObject):
 
     Parameters
     ----------
-    returncode: int
+    returncode : int
         Exit code of the process.
     """
 
@@ -84,14 +84,14 @@ class MCPServerClient(QObject):
         """
         Parameters
         ----------
-        get_tools: Callable
+        get_tools : Callable
             Function that returns the tools available to agents, by name. It's
             called in the main Qt thread for every request.
-        call_tool: Callable
+        call_tool : Callable
             Function called in the main Qt thread with the ``name``,
             ``arguments`` and ``client`` of a tool call, and a function to
             call with ``(content, is_error)`` when it finishes.
-        take_notes: Callable, optional
+        take_notes : Callable, optional
             Function called in the main Qt thread with a client id, that
             returns the notes for that client and forgets them.
         """

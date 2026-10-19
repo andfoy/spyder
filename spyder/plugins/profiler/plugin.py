@@ -380,16 +380,16 @@ class Profiler(SpyderDockablePlugin, ShellConnectPluginMixin, RunExecutor):
 
         Parameters
         ----------
-        code: str
+        code : str
             Python code to profile.
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by list_consoles. By default, the
             console currently selected in Spyder.
-        timeout: float, optional
+        timeout : float, optional
             Seconds to wait for the console to be free and the code to
             finish. If it doesn't finish in time, use get_profile_results
             once it does.
-        limit: int, optional
+        limit : int, optional
             Maximum number of functions in the results.
 
         Returns
@@ -423,21 +423,21 @@ class Profiler(SpyderDockablePlugin, ShellConnectPluginMixin, RunExecutor):
 
         Parameters
         ----------
-        filename: str
+        filename : str
             Absolute path of the file.
-        args: str, optional
+        args : str, optional
             Command line arguments for the file.
-        wdir: str, optional
+        wdir : str, optional
             Working directory to run the file in. By default, the file's
             directory.
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by list_consoles. By default, the
             console currently selected in Spyder.
-        timeout: float, optional
+        timeout : float, optional
             Seconds to wait for the console to be free and the file to
             finish. If it doesn't finish in time, use get_profile_results
             once it does.
-        limit: int, optional
+        limit : int, optional
             Maximum number of functions in the results.
 
         Returns
@@ -472,19 +472,19 @@ class Profiler(SpyderDockablePlugin, ShellConnectPluginMixin, RunExecutor):
 
         Parameters
         ----------
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by list_consoles. By default, the
             console currently selected in Spyder.
-        function: str, optional
+        function : str, optional
             Function to get the callers and callees of, by name (e.g.
             ``solve``) or location (e.g. ``model.py:42``).
-        sort: str, optional
+        sort : str, optional
             Sort functions by ``local`` time (spent in the function itself),
             ``total`` time (including the functions it called) or number of
             ``calls``.
-        limit: int, optional
+        limit : int, optional
             Maximum number of functions.
-        include_libraries: bool, optional
+        include_libraries : bool, optional
             Whether to include functions from libraries, the standard
             library and built-ins, or only the user's code.
         """

@@ -352,9 +352,9 @@ def parse_docstring(docstring: str | None) -> tuple[str, dict[str, str]]:
 
     Returns
     -------
-    description: str
+    description : str
         Text before the first section.
-    parameters: dict
+    parameters : dict
         Description of each parameter in the ``Parameters`` section.
     """
     if not docstring:

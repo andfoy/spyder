@@ -49,7 +49,7 @@ finishes later::
 
             Parameters
             ----------
-            pattern: str, optional
+            pattern : str, optional
                 Only list the items whose name contains it.
             \"\"\"
             return [
@@ -65,7 +65,7 @@ finishes later::
 
             Parameters
             ----------
-            name: str
+            name : str
                 Name of the item, as given by list_items.
             \"\"\"
             if name not in self.get_widget().names():
@@ -298,18 +298,18 @@ def expose(
 
     Parameters
     ----------
-    func: Callable, optional
+    func : Callable, optional
         Method to decorate, passed automatically when the decorator is used
         without arguments.
-    name: str, optional
+    name : str, optional
         Name for callers. By default, the method name.
-    description: str, optional
+    description : str, optional
         Description for callers. By default, the method's docstring without
         its sections (``Parameters``, ``Returns``, etc).
-    read_only: bool, optional
+    read_only : bool, optional
         Whether the method doesn't change any state. The default is
         ``False``.
-    destructive: bool, optional
+    destructive : bool, optional
         Whether the method may make changes that can't be undone. The
         default is ``False``.
     """
@@ -345,7 +345,7 @@ def get_exposed_methods(
 
     Parameters
     ----------
-    cls: type
+    cls : type
         Class to inspect, usually a plugin class.
 
     Returns

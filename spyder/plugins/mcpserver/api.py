@@ -142,9 +142,9 @@ class ToolCall:
 
     Parameters
     ----------
-    arguments: dict
+    arguments : dict
         Arguments sent by the agent, following the tool's input schema.
-    on_done: Callable
+    on_done : Callable
         Function called with ``(content, is_error)`` once the call finishes.
     """
 
@@ -180,22 +180,22 @@ class MCPTool:
 
     Parameters
     ----------
-    name: str
+    name : str
         Unique tool name. Prefix it with the plugin name to avoid clashes.
-    description: str
+    description : str
         What the tool does and when to use it. Agents rely on this text to
         pick tools, so be specific.
-    handler: Callable
+    handler : Callable
         Function called in the main Qt thread with a :class:`ToolCall`.
-    input_schema: dict
+    input_schema : dict
         JSON schema for the tool arguments.
-    title: str, optional
+    title : str, optional
         Human-readable name.
-    read_only: bool
+    read_only : bool
         Whether the tool doesn't modify any state.
-    destructive: bool
+    destructive : bool
         Whether the tool may make changes that can't be undone.
-    plugin: str, optional
+    plugin : str, optional
         Name of the plugin that provides the tool. Its tools are only listed
         while the plugin is available.
     """

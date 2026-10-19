@@ -433,7 +433,7 @@ class Projects(SpyderDockablePlugin):
 
         Parameters
         ----------
-        path: str
+        path : str
             Absolute path of the folder.
 
         Returns

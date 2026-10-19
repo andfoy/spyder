@@ -138,7 +138,7 @@ class ShellWidget(NamepaceBrowserWidget, HelpWidget, DebuggingWidget,
 
     Parameters
     ----------
-    died: bool
+    died : bool
         Whether it restarted because it died (e.g. it crashed), instead of
         being restarted on purpose.
     """

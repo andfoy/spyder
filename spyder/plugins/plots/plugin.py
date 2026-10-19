@@ -86,7 +86,7 @@ class Plots(SpyderDockablePlugin, ShellConnectPluginMixin):
 
         Parameters
         ----------
-        shellwidget: ShellWidget
+        shellwidget : ShellWidget
             Shellwidget of the console.
 
         Returns
@@ -110,7 +110,7 @@ class Plots(SpyderDockablePlugin, ShellConnectPluginMixin):
 
         Parameters
         ----------
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by list_consoles. By default, the
             console currently selected in Spyder.
         """
@@ -138,10 +138,10 @@ class Plots(SpyderDockablePlugin, ShellConnectPluginMixin):
 
         Parameters
         ----------
-        index: int, optional
+        index : int, optional
             Index of the figure, as given by list_figures. Negative values
             count from the end, so -1 is the most recent figure.
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by list_consoles. By default, the
             console currently selected in Spyder.
         """

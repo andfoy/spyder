@@ -90,17 +90,17 @@ def summarize_profile(
 
     Parameters
     ----------
-    stats: pstats.Stats
+    stats : pstats.Stats
         Profiling results.
-    is_library: Callable
+    is_library : Callable
         Whether a function is from a library (including the standard library
         and built-ins) rather than the user's code.
-    sort: str
+    sort : str
         Sort functions by ``local`` time (spent in the function itself),
         ``total`` time (including the functions it called) or ``calls``.
-    limit: int
+    limit : int
         Maximum number of functions.
-    include_libraries: bool
+    include_libraries : bool
         Whether to include library functions.
     """
     index = {"local": 2, "total": 3, "calls": 1}[sort]

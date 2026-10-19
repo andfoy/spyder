@@ -79,12 +79,12 @@ class JsonRpcPeer:
 
     Parameters
     ----------
-    readline: Callable
+    readline : Callable
         Coroutine function returning the next line as bytes, or ``b""`` on
         EOF.
-    write: Callable
+    write : Callable
         Coroutine function that writes bytes to the other end.
-    handlers: dict
+    handlers : dict
         Mapping from method names to coroutine functions taking the request
         params. Their return value is sent back as the result for requests
         and ignored for notifications.

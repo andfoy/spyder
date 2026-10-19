@@ -141,7 +141,7 @@ def run_code(shellwidget: ShellWidget, code: str, timeout: float) -> Future:
 
     Parameters
     ----------
-    timeout: float
+    timeout : float
         Seconds to wait for the console to be free and the code to finish.
     """
     check_not_debugging(shellwidget)
@@ -525,10 +525,10 @@ def call_kernel_helper(
 
     Parameters
     ----------
-    helper: Callable
+    helper : Callable
         Function to call. Its source is sent to the kernel, so it must be
         self-contained.
-    arguments: str
+    arguments : str
         Python expressions for its arguments, evaluated in the console's
         namespace.
 

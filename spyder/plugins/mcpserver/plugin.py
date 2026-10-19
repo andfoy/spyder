@@ -71,7 +71,7 @@ class MCPServer(SpyderPluginV2):
 
     Parameters
     ----------
-    url: str
+    url : str
         URL of the MCP endpoint.
     """
 
@@ -213,7 +213,7 @@ class MCPServer(SpyderPluginV2):
 
         Parameters
         ----------
-        tool: MCPTool
+        tool : MCPTool
             Tool to register. Its name must be unique.
         """
         if tool.name in self._tools:
@@ -295,11 +295,11 @@ class MCPServer(SpyderPluginV2):
 
         Parameters
         ----------
-        client_id: str
+        client_id : str
             Id of the client, as sent in the ``X-Spyder-Client-Id`` header.
-        name: str
+        name : str
             Name of the argument.
-        value: Any
+        value : Any
             Its value, or ``None`` to remove it.
         """
         self._dispatcher.set_client_argument(client_id, name, value)
@@ -346,7 +346,7 @@ class MCPServer(SpyderPluginV2):
 
         Parameters
         ----------
-        port: int, optional
+        port : int, optional
             Port to use if it's free. By default, the one in the settings.
         """
         token = self.get_conf("token")
@@ -391,11 +391,11 @@ class MCPServer(SpyderPluginV2):
 
         Parameters
         ----------
-        client_id: str, optional
+        client_id : str, optional
             Unique id of the client (e.g. an agent session), sent with its
             tool calls so tools can tell clients apart. Clients without one
             are identified by their MCP session.
-        client_name: str, optional
+        client_name : str, optional
             Name of the client shown to users, e.g. ``Agent 2``.
 
         Returns

@@ -1318,7 +1318,7 @@ class IPythonConsole(SpyderDockablePlugin, RunExecutor):
 
         Parameters
         ----------
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by :meth:`list_consoles` (e.g.
             ``1/A``). By default, the current console.
 
@@ -1422,12 +1422,12 @@ class IPythonConsole(SpyderDockablePlugin, RunExecutor):
 
         Parameters
         ----------
-        code: str
+        code : str
             Python code to run.
-        console_id: str, optional
+        console_id : str, optional
             Id of the console to use, as returned by list_consoles. By
             default, the console currently selected in Spyder.
-        timeout: float, optional
+        timeout : float, optional
             Seconds to wait for the console to be free and the code to finish
             before returning the output collected so far. The code keeps
             running, but it doesn't run if the console is still busy.
@@ -1452,7 +1452,7 @@ class IPythonConsole(SpyderDockablePlugin, RunExecutor):
 
         Parameters
         ----------
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by list_consoles. By default, the
             console currently selected in Spyder.
         """
@@ -1502,7 +1502,7 @@ class IPythonConsole(SpyderDockablePlugin, RunExecutor):
 
         Parameters
         ----------
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by list_consoles. By default, the
             console currently selected in Spyder.
 
@@ -1532,9 +1532,9 @@ class IPythonConsole(SpyderDockablePlugin, RunExecutor):
 
         Parameters
         ----------
-        name: str, optional
+        name : str, optional
             Name for the console's tab, e.g. the agent's name.
-        wdir: str, optional
+        wdir : str, optional
             Working directory of the new console. By default, the one Spyder
             uses for new consoles.
 
@@ -1607,10 +1607,10 @@ class IPythonConsole(SpyderDockablePlugin, RunExecutor):
 
         Parameters
         ----------
-        name: str
+        name : str
             Name of the variable, or an attribute of it (e.g. ``df`` or
             ``model.coef_``).
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by list_consoles. By default, the
             console currently selected in Spyder.
         """
@@ -1634,10 +1634,10 @@ class IPythonConsole(SpyderDockablePlugin, RunExecutor):
 
         Parameters
         ----------
-        name: str
+        name : str
             Name of the object, e.g. ``np.linspace`` or
             ``pandas.DataFrame.merge``.
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by list_consoles. By default, the
             console currently selected in Spyder.
         """
@@ -1660,9 +1660,9 @@ class IPythonConsole(SpyderDockablePlugin, RunExecutor):
 
         Parameters
         ----------
-        count: int, optional
+        count : int, optional
             Number of inputs to get.
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by list_consoles. By default, the
             console currently selected in Spyder.
         """
@@ -1689,17 +1689,17 @@ class IPythonConsole(SpyderDockablePlugin, RunExecutor):
 
         Parameters
         ----------
-        filename: str
+        filename : str
             Absolute path of the file.
-        args: str, optional
+        args : str, optional
             Command line arguments for the file.
-        wdir: str, optional
+        wdir : str, optional
             Working directory to run the file in. By default, the file's
             directory.
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by list_consoles. By default, the
             console currently selected in Spyder.
-        timeout: float, optional
+        timeout : float, optional
             Seconds to wait for the console to be free and the file to finish
             before returning the output collected so far. It keeps running.
 
@@ -1734,15 +1734,15 @@ class IPythonConsole(SpyderDockablePlugin, RunExecutor):
 
         Parameters
         ----------
-        filename: str
+        filename : str
             Absolute path of the file. It's opened in the Editor if needed.
-        cell: int or str
+        cell : int or str
             Index of the cell (0-based, the code before the first ``# %%``
             is cell 0 if there's any) or its name (the text after ``# %%``).
-        console_id: str, optional
+        console_id : str, optional
             Id of the console, as returned by list_consoles. By default, the
             console currently selected in Spyder.
-        timeout: float, optional
+        timeout : float, optional
             Seconds to wait for the console to be free and the cell to finish
             before returning the output collected so far. It keeps running.
 

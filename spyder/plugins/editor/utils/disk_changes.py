@@ -99,7 +99,7 @@ class OpenFilesWatcher(QObject):
 
     Parameters
     ----------
-    filename: str
+    filename : str
         Path of the file, as given to :meth:`set_files`.
     """
 

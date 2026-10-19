@@ -101,12 +101,12 @@ class ConsoleScheduler(QObject):
 
         Parameters
         ----------
-        caller: Caller or None
+        caller : Caller or None
             Who is running the code.
-        start: Callable
+        start : Callable
             Function that starts running the code and returns a future with
             its result. It takes the seconds left of ``timeout``.
-        timeout: float
+        timeout : float
             Seconds to wait for the code to start and finish. If the console
             is still busy when they pass, the code doesn't run.
 

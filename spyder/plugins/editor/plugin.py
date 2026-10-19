@@ -1310,7 +1310,7 @@ class Editor(SpyderDockablePlugin):
 
         Parameters
         ----------
-        filename: str, optional
+        filename : str, optional
             Absolute path of the file. By default, the current file.
         """
         if filename is None:
@@ -1331,9 +1331,9 @@ class Editor(SpyderDockablePlugin):
 
         Parameters
         ----------
-        filename: str
+        filename : str
             Absolute path of the file.
-        line: int, optional
+        line : int, optional
             Line to go to (1-based).
         """
         filename = osp.abspath(filename)
@@ -1357,15 +1357,15 @@ class Editor(SpyderDockablePlugin):
 
         Parameters
         ----------
-        filename: str
+        filename : str
             Absolute path of the file.
-        old_text: str
+        old_text : str
             Text to replace. It must match the Editor's contents exactly,
             including indentation (see read_editor_file), and appear only once
             unless replace_all is true.
-        new_text: str
+        new_text : str
             Text to put instead.
-        replace_all: bool, optional
+        replace_all : bool, optional
             Replace every occurrence of old_text.
         """
         filename = osp.abspath(filename)
@@ -1433,7 +1433,7 @@ class Editor(SpyderDockablePlugin):
 
         Parameters
         ----------
-        filename: str
+        filename : str
             Absolute path of the file.
         """
         filename = osp.abspath(filename)
@@ -1457,7 +1457,7 @@ class Editor(SpyderDockablePlugin):
 
         Parameters
         ----------
-        text: str
+        text : str
             Contents of the file.
         """
         self.get_widget().new(text=text)
@@ -1474,7 +1474,7 @@ class Editor(SpyderDockablePlugin):
 
         Parameters
         ----------
-        filename: str, optional
+        filename : str, optional
             Absolute path of the file. By default, the current file.
         """
         if filename is None:
