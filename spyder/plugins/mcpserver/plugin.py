@@ -15,6 +15,7 @@ forwards tool calls to this plugin.
 """
 
 # Standard library imports
+import json
 import logging
 import secrets
 import time
@@ -135,7 +136,7 @@ class MCPServer(SpyderPluginV2):
 
         container = self.get_container()
         container.sig_enabled_changed.connect(self._on_enabled_changed)
-        container.sig_copy_command_requested.connect(self.copy_command)
+        container.sig_copy_config_requested.connect(self.copy_config)
 
         PLUGIN_REGISTRY.sig_plugin_ready.connect(self._on_plugin_ready)
         self._collect_available_plugins()
@@ -158,7 +159,7 @@ class MCPServer(SpyderPluginV2):
         container = self.get_container()
         for action in [
             container.toggle_server_action,
-            container.copy_command_action,
+            container.copy_config_action,
         ]:
             main_menu.add_item_to_application_menu(
                 action,
@@ -172,7 +173,7 @@ class MCPServer(SpyderPluginV2):
         main_menu = self.get_plugin(Plugins.MainMenu)
         for action_id in [
             MCPServerActions.ToggleServer,
-            MCPServerActions.CopyCommand,
+            MCPServerActions.CopyConfig,
         ]:
             main_menu.remove_item_from_application_menu(
                 action_id, menu_id=ApplicationMenus.Tools
@@ -413,21 +414,30 @@ class MCPServer(SpyderPluginV2):
                 headers[CLIENT_NAME_HEADER] = client_name
         return {"url": url, "headers": headers}
 
-    def get_command(self) -> str | None:
-        """Return a command line that adds Spyder's MCP server to an agent."""
+    def get_config(self) -> dict | None:
+        """
+        Return the configuration that agents use to connect to the server,
+        in the ``mcpServers`` format that most of them read, or ``None`` if
+        it isn't running.
+        """
         info = self.get_connection_info()
         if info is None:
             return None
-        return (
-            f"claude mcp add --transport http spyder {info['url']} "
-            f"--header \"Authorization: {info['headers']['Authorization']}\""
-        )
+        return {
+            "mcpServers": {
+                "spyder": {
+                    "type": "http",
+                    "url": info["url"],
+                    "headers": info["headers"],
+                }
+            }
+        }
 
-    def copy_command(self) -> None:
-        """Copy the command that adds Spyder to an agent to the clipboard."""
-        command = self.get_command()
-        if command is not None:
-            QApplication.clipboard().setText(command)
+    def copy_config(self) -> None:
+        """Copy the configuration to connect to the server, as JSON."""
+        config = self.get_config()
+        if config is not None:
+            QApplication.clipboard().setText(json.dumps(config, indent=2))
 
     # ---- Private API
     # -------------------------------------------------------------------------

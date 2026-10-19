@@ -399,6 +399,17 @@ def test_server_kept_for_plugins(main_window, tools, qtbot):
     qtbot.wait(2000)
     assert mcp_server.is_server_running()
 
+    # Users can copy the configuration to connect other agents to it
+    mcp_server.copy_config()
+    config = json.loads(QApplication.clipboard().text())
+    assert config["mcpServers"]["spyder"] == {
+        "type": "http",
+        "url": mcp_server.get_url(),
+        "headers": {
+            "Authorization": f"Bearer {mcp_server.get_conf('token')}"
+        },
+    }
+
 
 class AnsweringContext(CallContext):
     """Call context of a client whose user answers with ``answer``."""

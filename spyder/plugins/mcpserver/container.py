@@ -17,7 +17,7 @@ from spyder.api.widgets.main_container import PluginMainContainer
 
 class MCPServerActions:
     ToggleServer = "toggle_mcp_server_action"
-    CopyCommand = "copy_mcp_command_action"
+    CopyConfig = "copy_mcp_config_action"
 
 
 class MCPServerContainer(PluginMainContainer):
@@ -32,8 +32,11 @@ class MCPServerContainer(PluginMainContainer):
         Whether the server is enabled.
     """
 
-    sig_copy_command_requested = Signal()
-    """This signal is emitted to copy the command to add the server."""
+    sig_copy_config_requested = Signal()
+    """
+    This signal is emitted to copy the configuration that agents use to
+    connect to the server.
+    """
 
     # ---- PluginMainContainer API
     # -------------------------------------------------------------------------
@@ -45,13 +48,13 @@ class MCPServerContainer(PluginMainContainer):
             option="enabled",
         )
 
-        self.copy_command_action = self.create_action(
-            MCPServerActions.CopyCommand,
-            _("Copy Claude Code command to connect to Spyder"),
+        self.copy_config_action = self.create_action(
+            MCPServerActions.CopyConfig,
+            _("Copy MCP server configuration for AI agents"),
             icon=self.create_icon("editcopy"),
-            triggered=self.sig_copy_command_requested,
+            triggered=self.sig_copy_config_requested,
         )
-        self.copy_command_action.setEnabled(False)
+        self.copy_config_action.setEnabled(False)
 
     def update_actions(self):
         pass
@@ -59,7 +62,7 @@ class MCPServerContainer(PluginMainContainer):
     # ---- Public API
     # -------------------------------------------------------------------------
     def set_server_running(self, running: bool) -> None:
-        self.copy_command_action.setEnabled(running)
+        self.copy_config_action.setEnabled(running)
 
     # ---- Private API
     # -------------------------------------------------------------------------
