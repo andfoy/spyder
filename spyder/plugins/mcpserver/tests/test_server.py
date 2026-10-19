@@ -86,6 +86,7 @@ async def start_server():
                         "callId": params["callId"],
                         "message": "Which console?",
                         "choices": ["Console 1/A", "New console"],
+                        "default": "New console",
                     },
                 )
                 await peer.notify(
@@ -259,6 +260,8 @@ def test_ask_user():
                             assert result.content[0].text == expected
 
             assert questions[0].message == "Which console?"
+            choice = questions[0].requested_schema["properties"]["choice"]
+            assert choice["default"] == "New console"
 
             # With the 2026-07-28 protocol, the call returns the question
             # and the client makes it again with the answer

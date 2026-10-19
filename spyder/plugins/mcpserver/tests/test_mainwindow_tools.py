@@ -409,7 +409,7 @@ class AnsweringContext(CallContext):
         self.answer = answer
         self.questions = []
 
-    def ask_user(self, message, choices, title=""):
+    def ask_user(self, message, choices, title="", default=None):
         self.questions.append((message, choices))
         future = Future()
         future.set_result(

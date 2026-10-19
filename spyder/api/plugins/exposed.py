@@ -101,10 +101,15 @@ class CallContext:
     """Whether the client can ask its user a question."""
 
     def ask_user(
-        self, message: str, choices: list[str], title: str = ""
+        self,
+        message: str,
+        choices: list[str],
+        title: str = "",
+        default: str | None = None,
     ) -> Future:
         """
-        Ask the client's user to pick one of ``choices``.
+        Ask the client's user to pick one of ``choices``, with ``default``
+        (one of them) picked at first, if given.
 
         Returns
         -------

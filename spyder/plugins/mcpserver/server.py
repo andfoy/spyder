@@ -171,15 +171,16 @@ def is_modern(ctx) -> bool:
 
 def question_schema(params: dict) -> dict:
     """Elicitation form schema for one of Spyder's questions."""
+    choice = {
+        "type": "string",
+        "title": params.get("title") or "Choice",
+        "enum": params["choices"],
+    }
+    if params.get("default") in params["choices"]:
+        choice["default"] = params["default"]
     return {
         "type": "object",
-        "properties": {
-            "choice": {
-                "type": "string",
-                "title": params.get("title") or "Choice",
-                "enum": params["choices"],
-            }
-        },
+        "properties": {"choice": choice},
         "required": ["choice"],
     }
 

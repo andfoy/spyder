@@ -280,6 +280,7 @@ class MCPServerClient(QObject):
         message: str,
         choices: list[str],
         title: str,
+        default: str | None,
         future: Future,
     ) -> None:
         choice = None
@@ -291,6 +292,7 @@ class MCPServerClient(QObject):
                     "message": message,
                     "choices": choices,
                     "title": title,
+                    "default": default,
                 },
             )
             if answer.get("action") == "accept":
@@ -359,12 +361,18 @@ class _ServerCallContext(CallContext):
         self.can_ask_user = can_ask_user and call_id is not None
 
     def ask_user(
-        self, message: str, choices: list[str], title: str = ""
+        self,
+        message: str,
+        choices: list[str],
+        title: str = "",
+        default: str | None = None,
     ) -> Future:
         if not self.can_ask_user:
-            return super().ask_user(message, choices, title)
+            return super().ask_user(message, choices, title, default)
         future: Future = Future()
-        self._client._ask_user(self._call_id, message, choices, title, future)
+        self._client._ask_user(
+            self._call_id, message, choices, title, default, future
+        )
         return future
 
     def report_progress(self, message: str) -> None:
