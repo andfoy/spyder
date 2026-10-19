@@ -525,6 +525,38 @@ def test_get_cwd(ipyconsole, qtbot, tmpdir):
 
 
 @flaky(max_runs=3)
+def test_background_console_cwd(ipyconsole, qtbot, tmpdir):
+    """
+    The working directory of a console that isn't the current one doesn't
+    become Spyder's until the user selects it.
+    """
+    background = ipyconsole.get_current_shellwidget()
+    ipyconsole.create_new_client()
+    current = ipyconsole.get_current_shellwidget()
+    qtbot.waitUntil(
+        lambda: current._prompt_html is not None, timeout=SHELL_TIMEOUT
+    )
+    assert current is not background
+
+    changes = []
+    ipyconsole.sig_current_directory_changed.connect(
+        lambda path, server_id: changes.append(path)
+    )
+
+    # Change directory in the console that isn't selected
+    tempdir = str(tmpdir.mkdir("background"))
+    with qtbot.waitSignal(background.executed):
+        background.execute(f"import os; os.chdir({tempdir!r})")
+    qtbot.wait(1000)
+    assert changes == []
+
+    # Selecting it makes its directory Spyder's
+    ipyconsole.set_current_shellwidget(background)
+    qtbot.waitUntil(lambda: bool(changes))
+    assert set(changes) == {tempdir}
+
+
+@flaky(max_runs=3)
 def test_request_env(ipyconsole, qtbot):
     """Test that getting env vars from the kernel is working as expected."""
     shell = ipyconsole.get_current_shellwidget()
