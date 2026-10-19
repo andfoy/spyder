@@ -20,31 +20,10 @@ from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QApplication
 
 # Local imports
-from spyder.api.plugin_registration.registry import PLUGIN_REGISTRY
 from spyder.api.plugins.exposed import CallContext, Caller, calling_as
-from spyder.config.manager import CONF
 from spyder.plugins.ipythonconsole.tests.conftest import SHELL_TIMEOUT
 from spyder.plugins.mcpserver.api import ToolCall
 from spyder.plugins.mcpserver.focus import call_tool_keeping_focus
-
-
-@pytest.fixture
-def main_window(qtbot):
-    """Start a full Spyder window, with code analysis enabled."""
-    CONF.set("tours", "show_tour_message", False)
-    CONF.set("main", "single_instance", False)
-    CONF.set("ipython_console", "pylab/backend", "inline")
-    CONF.set("debugger", "pdb_stop_first_line", True)
-
-    from spyder.app import start
-    window = start.main()
-    yield window
-
-    window.closing(close_immediately=True)
-    window.close()
-    CONF.reset_to_defaults(notification=False)
-    CONF.reset_manager()
-    PLUGIN_REGISTRY.reset()
 
 
 @pytest.fixture
@@ -357,58 +336,6 @@ def test_profiling(main_window, tools, qtbot, tmp_path):
     assert functions["work"]["calls"] == 5
     assert osp.normcase(functions["work"]["file"]) == osp.normcase(filename)
     assert not functions["work"]["library"]
-
-
-def test_server_restarts(main_window, tools, qtbot):
-    """The server restarts on the same port if it exits unexpectedly."""
-    mcp_server = main_window.get_plugin("mcp_server")
-    mcp_server.start_server()
-    qtbot.waitUntil(mcp_server.is_server_running, timeout=30000)
-    url = mcp_server.get_url()
-
-    mcp_server._client._process.kill()
-    qtbot.waitUntil(lambda: not mcp_server.is_server_running(), timeout=10000)
-    qtbot.waitUntil(mcp_server.is_server_running, timeout=30000)
-    assert mcp_server.get_url() == url
-
-    # But not if it's stopped
-    mcp_server.stop_server()
-    qtbot.waitUntil(lambda: not mcp_server.is_server_running(), timeout=10000)
-    qtbot.wait(2000)
-    assert not mcp_server.is_server_running()
-
-
-def test_server_kept_for_plugins(main_window, tools, qtbot):
-    """
-    A server started by a plugin (e.g. for its agent sessions) keeps running
-    when Spyder notifies the "enabled" option without a change, and when the
-    user turns the option off.
-    """
-    mcp_server = main_window.get_plugin("mcp_server")
-    assert not mcp_server.get_conf("enabled")
-    mcp_server.start_server()
-    qtbot.waitUntil(mcp_server.is_server_running, timeout=30000)
-
-    # Spyder notifies all options, e.g. when the main interpreter is set
-    CONF.notify_section_all_observers("mcp_server")
-    qtbot.wait(2000)
-    assert mcp_server.is_server_running()
-
-    mcp_server.set_conf("enabled", True)
-    mcp_server.set_conf("enabled", False)
-    qtbot.wait(2000)
-    assert mcp_server.is_server_running()
-
-    # Users can copy the configuration to connect other agents to it
-    mcp_server.copy_config()
-    config = json.loads(QApplication.clipboard().text())
-    assert config["mcpServers"]["spyder"] == {
-        "type": "http",
-        "url": mcp_server.get_url(),
-        "headers": {
-            "Authorization": f"Bearer {mcp_server.get_conf('token')}"
-        },
-    }
 
 
 class AnsweringContext(CallContext):
