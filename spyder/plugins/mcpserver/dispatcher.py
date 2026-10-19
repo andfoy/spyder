@@ -65,6 +65,9 @@ class ToolDispatcher:
         # last call (e.g. the user opened a project)
         self._notes: dict[str, list[str]] = {}
 
+        # Called with each call's caller, tool and arguments before it runs
+        self._call_observer: Callable | None = None
+
     # ---- Clients
     def get_clients(self) -> list[Caller]:
         """
@@ -100,6 +103,21 @@ class ToolDispatcher:
         for client_id in self._clients:
             if client_id != exclude:
                 self._notes.setdefault(client_id, []).append(message)
+
+    def notify_client(self, client_id: str, message: str) -> None:
+        """Leave a note for one client (see :meth:`notify_clients`)."""
+        if client_id in self._clients:
+            self._notes.setdefault(client_id, []).append(message)
+
+    def set_call_observer(
+        self, observer: Callable[[Caller, MCPTool, dict], None] | None
+    ) -> None:
+        """
+        Call ``observer`` with the caller, tool and arguments (with the
+        client's defaults and the user's answers) of each call from a client
+        before it runs, e.g. to know which consoles each client uses.
+        """
+        self._call_observer = observer
 
     def take_notes(self, client_id: str) -> list[str]:
         """Return the notes for a client and forget them."""
@@ -198,6 +216,11 @@ class ToolDispatcher:
         self, tool, caller, arguments, to_ask, on_done, context
     ) -> None:
         if not to_ask:
+            if self._call_observer is not None and caller is not None:
+                try:
+                    self._call_observer(caller, tool, arguments)
+                except Exception:
+                    logger.debug("Error observing a call", exc_info=True)
             with calling_as(caller, context):
                 call_tool_keeping_focus(tool, arguments, on_done)
             return

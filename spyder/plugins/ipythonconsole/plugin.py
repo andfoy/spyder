@@ -1337,6 +1337,16 @@ class IPythonConsole(SpyderDockablePlugin, RunExecutor):
                 return client.shellwidget
         return None
 
+    def get_console_id(self, shellwidget=None) -> Optional[str]:
+        """
+        Get the id of a console (e.g. ``1/A``), as used by the exposed
+        methods, from its shellwidget. By default, the current console.
+        """
+        if shellwidget is None:
+            shellwidget = self.get_current_shellwidget()
+        client = getattr(shellwidget, "ipyclient", None)
+        return get_console_id(client) if client is not None else None
+
     @expose(read_only=True)
     def list_consoles(self) -> list:
         """

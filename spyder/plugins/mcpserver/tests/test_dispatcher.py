@@ -188,3 +188,21 @@ def test_notes(dispatcher):
     dispatcher.unregister_client("agent-2")
     dispatcher.notify_clients("Something else.")
     assert dispatcher.take_notes("agent-2") == []
+
+
+def test_note_for_one_client_and_call_observer(dispatcher):
+    calls = []
+    dispatcher.set_call_observer(
+        lambda caller, tool, arguments: calls.append(
+            (caller.name, tool.name, arguments)
+        )
+    )
+    dispatcher.set_client_argument("agent-1", "console_id", "2/B")
+    call(dispatcher, "run", {"code": "1"})
+    assert calls == [("Agent 1", "run", {"code": "1", "console_id": "2/B"})]
+
+    dispatcher.register_client("agent-2", "Agent 2")
+    dispatcher.notify_client("agent-2", "Console 2/B was closed.")
+    dispatcher.notify_client("unknown", "Ignored.")
+    assert dispatcher.take_notes("agent-1") == []
+    assert dispatcher.take_notes("agent-2") == ["Console 2/B was closed."]

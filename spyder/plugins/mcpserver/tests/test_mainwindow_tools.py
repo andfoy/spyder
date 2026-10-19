@@ -478,6 +478,81 @@ def test_project_tools(main_window, tools, qtbot, tmp_path):
     ]
 
 
+def test_console_notes(main_window, tools, qtbot):
+    """
+    Agents are told when a console they used restarts, dies or closes.
+    """
+    mcp_server = main_window.get_plugin("mcp_server")
+    ipyconsole = main_window.ipyconsole
+    agent_1 = {"id": "agent-1", "name": "Agent 1"}
+    mcp_server.register_client("agent-1", "Agent 1")
+    mcp_server.register_client("agent-2", "Agent 2")
+    notes = mcp_server._dispatcher._notes
+
+    def run(code, console_id=None, timeout=60):
+        arguments = {"code": code, "timeout": timeout}
+        if console_id:
+            arguments["console_id"] = console_id
+        results = []
+        mcp_server._dispatcher.call(
+            "execute_code",
+            arguments,
+            agent_1,
+            lambda content, is_error: results.append(
+                [item.get("text") for item in content]
+            ),
+        )
+        qtbot.waitUntil(lambda: bool(results), timeout=SHELL_TIMEOUT)
+        return results[0]
+
+    # Agent 1 uses the selected console, 1/A
+    run("x = 1")
+    shell = ipyconsole.get_current_shellwidget()
+
+    ipyconsole.restart_kernel()
+    qtbot.waitUntil(lambda: bool(notes.get("agent-1")), timeout=SHELL_TIMEOUT)
+    assert notes["agent-1"] == [
+        "Console 1/A was restarted, so the variables, imports and figures "
+        "created in it before are gone."
+    ]
+    assert "agent-2" not in notes
+
+    # It gets the note with its next call's result
+    qtbot.waitUntil(lambda: shell.spyder_kernel_ready, timeout=SHELL_TIMEOUT)
+    qtbot.wait(1000)
+    texts = run("y = 2")
+    assert texts[0].startswith("Since your last call, in Spyder:")
+    assert "Console 1/A was restarted" in texts[0]
+
+    # A kernel that dies. It may die while the call that killed it is still
+    # running, so the note can come with that call's result.
+    texts = run("import os; os._exit(1)", timeout=5)
+
+    def told_about_death():
+        told = texts + notes.get("agent-1", [])
+        return any("The kernel of console 1/A died" in t for t in told)
+
+    qtbot.waitUntil(told_about_death, timeout=SHELL_TIMEOUT)
+    notes.pop("agent-1", None)
+    qtbot.waitUntil(lambda: shell.spyder_kernel_ready, timeout=SHELL_TIMEOUT)
+
+    # A console of its own that is closed
+    console = call_tool_json(qtbot, tools["new_console"], name="Agent 1")
+    run("z = 3", console_id=console["id"])
+    client = [
+        c for c in ipyconsole.get_clients()
+        if c.shellwidget is ipyconsole.get_console_shellwidget(console["id"])
+    ][0]
+    ipyconsole.get_widget().close_client(client=client, ask_recursive=False)
+    qtbot.waitUntil(lambda: bool(notes.get("agent-1")), timeout=SHELL_TIMEOUT)
+    assert notes.pop("agent-1") == [
+        f"Console {console['id']}, which you used, was closed. Use "
+        f"list_consoles to choose another console, or new_console to open "
+        f"one."
+    ]
+    assert "agent-2" not in notes
+
+
 def test_diagnostics(main_window, tools, qtbot, tmp_path):
     filename = str(tmp_path / "lint_me.py")
     with open(filename, "w") as f:
