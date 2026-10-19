@@ -24,7 +24,12 @@ from qtpy.QtCore import Signal
 from qtpy.QtWidgets import QApplication
 
 # Local imports
-from spyder.api.plugins import Plugins, SpyderPluginV2
+from spyder.api.plugins import (
+    Plugins,
+    SpyderPluginV2,
+    current_caller,
+    expose,
+)
 from spyder.api.plugin_registration.decorators import (
     on_plugin_available,
     on_plugin_teardown,
@@ -36,6 +41,7 @@ from spyder.plugins.mcpserver.api import MCPTool
 from spyder.plugins.mcpserver.bridge import (
     CLIENT_ID_HEADER,
     CLIENT_NAME_HEADER,
+    NOTES_PATH,
 )
 from spyder.plugins.mcpserver.client import MCPServerClient
 from spyder.plugins.mcpserver.container import (
@@ -53,7 +59,7 @@ class MCPServer(SpyderPluginV2):
     """MCP server plugin."""
 
     NAME = "mcp_server"
-    OPTIONAL = [Plugins.MainMenu]
+    OPTIONAL = [Plugins.MainMenu, Plugins.Projects]
     CONTAINER_CLASS = MCPServerContainer
     CONF_SECTION = NAME
     CONF_FILE = False
@@ -110,7 +116,10 @@ class MCPServer(SpyderPluginV2):
         # (e.g. agent sessions), so it keeps running for them
         self._used_by_plugins = False
         self._client = MCPServerClient(
-            self, self._get_available_tools, self._dispatcher.call
+            self,
+            self._get_available_tools,
+            self._dispatcher.call,
+            self._dispatcher.take_notes,
         )
         self._client.sig_server_ready.connect(self._on_server_ready)
         self._client.sig_server_stopped.connect(self._on_server_stopped)
@@ -160,6 +169,18 @@ class MCPServer(SpyderPluginV2):
                 action_id, menu_id=ApplicationMenus.Tools
             )
 
+    @on_plugin_available(plugin=Plugins.Projects)
+    def on_projects_available(self):
+        projects = self.get_plugin(Plugins.Projects)
+        projects.sig_project_loaded.connect(self._on_project_loaded)
+        projects.sig_project_closed.connect(self._on_project_closed)
+
+    @on_plugin_teardown(plugin=Plugins.Projects)
+    def on_projects_teardown(self):
+        projects = self.get_plugin(Plugins.Projects)
+        projects.sig_project_loaded.disconnect(self._on_project_loaded)
+        projects.sig_project_closed.disconnect(self._on_project_closed)
+
     # ---- Public API
     # -------------------------------------------------------------------------
     def register_tool(self, tool: MCPTool) -> None:
@@ -182,6 +203,58 @@ class MCPServer(SpyderPluginV2):
     def get_tools(self) -> list[MCPTool]:
         """Return the tools available to agents."""
         return list(self._get_available_tools().values())
+
+    def register_client(self, client_id: str, name: str) -> None:
+        """
+        Register a client before it calls any tool (e.g. an agent session a
+        plugin starts), so it gets notes about what happens in Spyder from
+        the start.
+        """
+        self._dispatcher.register_client(client_id, name)
+
+    def unregister_client(self, client_id: str) -> None:
+        """Forget a client, e.g. when its agent session ends."""
+        self._dispatcher.unregister_client(client_id)
+
+    def notify_clients(self, message: str, exclude: str | None = None) -> None:
+        """
+        Tell clients (except ``exclude``, e.g. the one that caused it) about
+        something that happened in Spyder that may affect them. They get it
+        with the result of their next tool call, or from the endpoint at
+        :meth:`get_notes_url`.
+        """
+        self._dispatcher.notify_clients(message, exclude)
+
+    def get_notes_url(self) -> str | None:
+        """
+        URL where clients get their notes outside of tool calls (e.g. from
+        an agent's hooks), with ``?client=<id>`` and the same authorization
+        header as the MCP endpoint. ``None`` if the server isn't running.
+        """
+        url = self.get_url()
+        if url is None:
+            return None
+        return url.rsplit("/", 1)[0] + NOTES_PATH
+
+    @expose(read_only=True)
+    def list_agent_sessions(self) -> list:
+        """
+        List the AI agent sessions connected to Spyder, including yours,
+        with their name and whether they're running a Spyder tool now. Use
+        it to coordinate with them, e.g. before restarting a console or
+        opening a project, which affect everyone. list_consoles shows which
+        consoles each one runs code in.
+        """
+        caller = current_caller()
+        sessions = []
+        for client in self._dispatcher.get_clients():
+            you = caller is not None and client.id == caller.id
+            # Your own call to this tool doesn't count
+            running = self._dispatcher.get_running_calls(client.id) - you
+            sessions.append(
+                {"name": client.name, "you": you, "busy": running > 0}
+            )
+        return sessions
 
     def get_clients(self) -> list:
         """
@@ -419,3 +492,35 @@ class MCPServer(SpyderPluginV2):
         self._restarts.append(now)
         logger.warning("Restarting the MCP server")
         self._start_server(port=self._server_port)
+
+    # ---- Notes about Spyder's state for agents
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def _describe_actor() -> tuple[str, str | None]:
+        """Who is doing what Spyder is doing now, and their client id."""
+        caller = current_caller()
+        if caller is None:
+            return "The user", None
+        return caller.name, caller.id
+
+    def _on_project_loaded(self, path: str) -> None:
+        projects = self.get_plugin(Plugins.Projects, error=False)
+        if projects is not None and projects.get_active_project_path():
+            path = projects.get_active_project_path()
+        who, client_id = self._describe_actor()
+        self.notify_clients(
+            f"{who} opened the project {path}. Opening a project restarts "
+            f"Spyder's IPython consoles, so the variables, imports and "
+            f"figures created in them before are probably gone: check "
+            f"list_consoles and list_variables before relying on earlier "
+            f"results.",
+            exclude=client_id,
+        )
+
+    def _on_project_closed(self, path) -> None:
+        if not isinstance(path, str) or not path:
+            return
+        who, client_id = self._describe_actor()
+        self.notify_clients(
+            f"{who} closed the project {path}.", exclude=client_id
+        )

@@ -79,6 +79,7 @@ class MCPServerClient(QObject):
         parent,
         get_tools: Callable[[], dict[str, MCPTool]],
         call_tool: Callable[[str, dict, dict | None, Callable], None],
+        take_notes: Callable[[str], list[str]] | None = None,
     ) -> None:
         """
         Parameters
@@ -90,10 +91,14 @@ class MCPServerClient(QObject):
             Function called in the main Qt thread with the ``name``,
             ``arguments`` and ``client`` of a tool call, and a function to
             call with ``(content, is_error)`` when it finishes.
+        take_notes: Callable, optional
+            Function called in the main Qt thread with a client id, that
+            returns the notes for that client and forgets them.
         """
         super().__init__(parent)
         self._get_tools = get_tools
         self._call_tool = call_tool
+        self._take_notes = take_notes or (lambda client_id: [])
         self._process: asyncio.subprocess.Process | None = None
         self.url: str | None = None
 
@@ -183,6 +188,7 @@ class MCPServerClient(QObject):
             {
                 BridgeMethods.ListTools: self._handle_list_tools,
                 BridgeMethods.CallTool: self._handle_call_tool,
+                BridgeMethods.TakeNotes: self._handle_take_notes,
                 BridgeMethods.ServerReady: self._handle_server_ready,
             },
         )
@@ -233,6 +239,11 @@ class MCPServerClient(QObject):
             lambda done: done(
                 [tool.to_dict() for tool in self._get_tools().values()]
             )
+        )
+
+    async def _handle_take_notes(self, params: dict) -> list[str]:
+        return await self._run_in_qt(
+            lambda done: done(self._take_notes(params["clientId"]))
         )
 
     async def _handle_call_tool(self, params: dict) -> dict:

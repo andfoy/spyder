@@ -61,10 +61,49 @@ class ToolDispatcher:
         # Number of calls running for each client
         self._running: dict[str, int] = {}
 
+        # Notes for each client about what happened in Spyder since its
+        # last call (e.g. the user opened a project)
+        self._notes: dict[str, list[str]] = {}
+
     # ---- Clients
     def get_clients(self) -> list[Caller]:
-        """Return the clients that have called tools."""
+        """
+        Return the clients that have called tools or were registered with
+        :meth:`register_client`.
+        """
         return list(self._clients.values())
+
+    def register_client(self, client_id: str, name: str) -> None:
+        """
+        Register a client before it calls any tool (e.g. an agent session
+        started by a plugin), so it gets notes from the start.
+        """
+        self._clients[client_id] = Caller(client_id, name)
+
+    def unregister_client(self, client_id: str) -> None:
+        """Forget a client, e.g. when its session ends."""
+        self._clients.pop(client_id, None)
+        self._notes.pop(client_id, None)
+        self._client_arguments.pop(client_id, None)
+
+    def get_running_calls(self, client_id: str) -> int:
+        """Number of tool calls of a client that are running."""
+        return self._running.get(client_id, 0)
+
+    # ---- Notes
+    def notify_clients(self, message: str, exclude: str | None = None) -> None:
+        """
+        Leave a note for all clients (except ``exclude``, e.g. the one that
+        caused it) about something that happened in Spyder. They get it with
+        their next tool call's result, or with :meth:`take_notes`.
+        """
+        for client_id in self._clients:
+            if client_id != exclude:
+                self._notes.setdefault(client_id, []).append(message)
+
+    def take_notes(self, client_id: str) -> list[str]:
+        """Return the notes for a client and forget them."""
+        return self._notes.pop(client_id, [])
 
     def set_client_argument(
         self, client_id: str, name: str, value: Any
@@ -128,12 +167,18 @@ class ToolDispatcher:
             caller = Caller(client["id"], client.get("name") or client["id"])
             self._clients[caller.id] = caller
 
-            # Track the call until it finishes
+            # Track the call until it finishes, and add the client's notes
+            # to its result
             self._running[caller.id] = self._running.get(caller.id, 0) + 1
             client_done = on_done
 
             def on_done(content, is_error, _client_id=caller.id):
                 self._running[_client_id] -= 1
+                notes = self.take_notes(_client_id)
+                if notes:
+                    content = [text_content(format_notes(notes))] + list(
+                        content
+                    )
                 client_done(content, is_error)
 
         arguments = dict(arguments)
@@ -153,7 +198,7 @@ class ToolDispatcher:
         self, tool, caller, arguments, to_ask, on_done, context
     ) -> None:
         if not to_ask:
-            with calling_as(caller):
+            with calling_as(caller, context):
                 call_tool_keeping_focus(tool, arguments, on_done)
             return
 
@@ -195,3 +240,10 @@ class ToolDispatcher:
                 got(value)
 
         result.add_done_callback(on_answer)
+
+
+def format_notes(notes: list[str]) -> str:
+    """Notes for a client, as text for it."""
+    return "Since your last call, in Spyder:\n" + "\n".join(
+        f"- {note}" for note in notes
+    )

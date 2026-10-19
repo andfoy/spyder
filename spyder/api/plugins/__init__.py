@@ -25,9 +25,11 @@ There are two types of plugins available:
 
 from .enum import DockablePlugins, OptionalPlugins, Plugins  # noqa
 from .exposed import (  # noqa
+    CallContext,
     Caller,
     ExposedCallError,
     Image,
+    current_call_context,
     current_caller,
     expose,
 )
@@ -42,7 +44,9 @@ __all__ = [
     "SpyderDockablePlugin",
     "expose",
     "Caller",
+    "CallContext",
     "current_caller",
+    "current_call_context",
     "ExposedCallError",
     "Image",
 ]

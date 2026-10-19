@@ -38,6 +38,10 @@ TOKEN_ENV_VAR = "SPYDER_MCP_TOKEN"
 # HTTP headers clients send to say who they are, e.g. each agent session
 # started from Spyder. Clients without them are identified by their MCP
 # session.
+# Endpoint where clients get their notes (what happened in Spyder since
+# their last tool call) outside of tool calls, e.g. from agent hooks
+NOTES_PATH = "/spyder/notes"
+
 CLIENT_ID_HEADER = "X-Spyder-Client-Id"
 CLIENT_NAME_HEADER = "X-Spyder-Client-Name"
 
@@ -48,6 +52,7 @@ class BridgeMethods:
     # Subprocess -> Spyder (requests)
     ListTools = "spyder/listTools"
     CallTool = "spyder/callTool"
+    TakeNotes = "spyder/takeNotes"
 
     # Subprocess -> Spyder (notifications)
     ServerReady = "server/ready"

@@ -35,12 +35,15 @@ import uuid
 # Third-party imports
 import mcp.types as types
 from mcp.server.lowlevel import Server
+from starlette.responses import JSONResponse
+from starlette.routing import Route
 import uvicorn
 
 # Local imports
 from spyder.plugins.mcpserver.bridge import (
     CLIENT_ID_HEADER,
     CLIENT_NAME_HEADER,
+    NOTES_PATH,
     BridgeError,
     BridgeMethods,
     JsonRpcPeer,
@@ -227,10 +230,23 @@ async def serve(host: str, port: int, token: str) -> None:
     peer = JsonRpcPeer.from_stdio()
     server = create_mcp_server(peer)
 
-    app = BearerTokenMiddleware(
-        server.streamable_http_app(streamable_http_path=MCP_PATH, host=host),
-        token,
+    async def notes_endpoint(request) -> JSONResponse:
+        """Notes for a client (``?client=<id>``), which are then forgotten."""
+        client_id = request.query_params.get("client")
+        notes = []
+        if client_id:
+            notes = await peer.request(
+                BridgeMethods.TakeNotes, {"clientId": client_id}
+            )
+        return JSONResponse({"notes": notes})
+
+    mcp_app = server.streamable_http_app(
+        streamable_http_path=MCP_PATH, host=host
     )
+    mcp_app.router.routes.insert(
+        0, Route(NOTES_PATH, notes_endpoint, methods=["GET"])
+    )
+    app = BearerTokenMiddleware(mcp_app, token)
     config = uvicorn.Config(
         app, host=host, port=port, log_level="warning", lifespan="on"
     )

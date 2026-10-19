@@ -149,3 +149,42 @@ def test_busy_clients(dispatcher):
     # Errors finish calls too
     call(dispatcher, "missing")
     assert dispatcher.get_busy_clients() == set()
+
+
+def test_notes(dispatcher):
+    """Clients get notes about what happened in Spyder, once."""
+    dispatcher.register_client("agent-2", "Agent 2")
+    call(dispatcher, "run")
+
+    # The client that caused something isn't told about it
+    dispatcher.notify_clients("A project was opened.", exclude="agent-1")
+    assert call(dispatcher, "run") == [("Agent 1 in selected", False)]
+
+    dispatcher.notify_clients("Console 1/A was restarted.")
+    results = []
+    dispatcher.call(
+        "run",
+        {},
+        CLIENT,
+        lambda content, is_error: results.append(
+            [item["text"] for item in content]
+        ),
+    )
+    assert results == [
+        [
+            "Since your last call, in Spyder:\n"
+            "- Console 1/A was restarted.",
+            "Agent 1 in selected",
+        ]
+    ]
+
+    # Registered clients get them too, also without calling tools
+    assert dispatcher.take_notes("agent-2") == [
+        "A project was opened.",
+        "Console 1/A was restarted.",
+    ]
+    assert dispatcher.take_notes("agent-2") == []
+
+    dispatcher.unregister_client("agent-2")
+    dispatcher.notify_clients("Something else.")
+    assert dispatcher.take_notes("agent-2") == []

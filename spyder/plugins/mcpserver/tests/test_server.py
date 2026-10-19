@@ -18,6 +18,7 @@ import pytest
 from spyder.plugins.mcpserver.bridge import (
     CLIENT_ID_HEADER,
     CLIENT_NAME_HEADER,
+    NOTES_PATH,
     BridgeMethods,
     JsonRpcPeer,
     TOKEN_ENV_VAR,
@@ -100,6 +101,11 @@ async def start_server():
     async def server_ready(params):
         ready.set_result(params["url"])
 
+    notes = {"agent-2": ["The user opened a project."]}
+
+    async def take_notes(params):
+        return notes.pop(params["clientId"], [])
+
     peer = JsonRpcPeer(
         process.stdout.readline,
         write,
@@ -107,6 +113,7 @@ async def start_server():
             BridgeMethods.ListTools: list_tools,
             BridgeMethods.CallTool: call_tool,
             BridgeMethods.ServerReady: server_ready,
+            BridgeMethods.TakeNotes: take_notes,
         },
     )
     peer_task = asyncio.create_task(peer.run())
@@ -223,6 +230,32 @@ def test_ask_user():
                             assert result.content[0].text == expected
 
             assert questions[0].message == "Which console?"
+        finally:
+            process.stdin.close()
+            assert await asyncio.wait_for(process.wait(), 10) == 0
+            await peer_task
+
+    asyncio.run(run())
+
+
+def test_notes_endpoint():
+    """Clients get their notes from Spyder, once, with the token."""
+
+    async def run():
+        process, peer_task, url, clients = await start_server()
+        notes_url = url.rsplit("/", 1)[0] + NOTES_PATH
+        try:
+            async with httpx2.AsyncClient() as http:
+                response = await http.get(notes_url, params={"client": "x"})
+                assert response.status_code == 401
+
+            headers = {"Authorization": f"Bearer {TOKEN}"}
+            async with httpx2.AsyncClient(headers=headers) as http:
+                for expected in [["The user opened a project."], []]:
+                    response = await http.get(
+                        notes_url, params={"client": "agent-2"}
+                    )
+                    assert response.json() == {"notes": expected}
         finally:
             process.stdin.close()
             assert await asyncio.wait_for(process.wait(), 10) == 0

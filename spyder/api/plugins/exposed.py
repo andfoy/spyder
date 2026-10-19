@@ -37,6 +37,7 @@ started).
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
+from concurrent.futures import Future
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -86,8 +87,48 @@ class Caller:
     """Name shown to users, e.g. ``Agent 2``."""
 
 
+class CallContext:
+    """
+    What an exposed method can do with the client that called it while it
+    runs: ask the client's user a question where they're already looking
+    (e.g. an AI agent's interface), and report progress.
+
+    This base class is the one used when the client doesn't support it (or
+    there's no client): it can't ask and ignores progress.
+    """
+
+    can_ask_user: bool = False
+    """Whether the client can ask its user a question."""
+
+    def ask_user(
+        self, message: str, choices: list[str], title: str = ""
+    ) -> Future:
+        """
+        Ask the client's user to pick one of ``choices``.
+
+        Returns
+        -------
+        Future
+            Resolved in the main Qt thread with the choice, or ``None`` if
+            the user declined or dismissed the question (or the client can't
+            ask).
+        """
+        future: Future = Future()
+        future.set_result(None)
+        return future
+
+    def report_progress(self, message: str) -> None:
+        """
+        Tell the client what the call is doing, e.g. waiting for the user.
+        It also keeps clients from giving up on calls that take a while.
+        """
+
+
 _current_caller: ContextVar[Caller | None] = ContextVar(
     "spyder_exposed_caller", default=None
+)
+_current_context: ContextVar[CallContext | None] = ContextVar(
+    "spyder_exposed_call_context", default=None
 )
 
 
@@ -103,13 +144,29 @@ def current_caller() -> Caller | None:
     return _current_caller.get()
 
 
+def current_call_context() -> CallContext:
+    """
+    Return the context of the call to the exposed method that is running,
+    e.g. to ask the caller's user to confirm something. Like
+    :func:`current_caller`, read it when the method is called.
+    """
+    return _current_context.get() or CallContext()
+
+
 @contextmanager
-def calling_as(caller: Caller | None) -> Iterator[None]:
-    """Run exposed methods called inside this block on behalf of ``caller``."""
+def calling_as(
+    caller: Caller | None, context: CallContext | None = None
+) -> Iterator[None]:
+    """
+    Run exposed methods called inside this block on behalf of ``caller``,
+    with ``context`` to reach it while they run.
+    """
     token = _current_caller.set(caller)
+    context_token = _current_context.set(context)
     try:
         yield
     finally:
+        _current_context.reset(context_token)
         _current_caller.reset(token)
 
 

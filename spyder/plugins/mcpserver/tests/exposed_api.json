@@ -519,6 +519,18 @@
       "destructive": false
     }
   ],
+  "mcp_server": [
+    {
+      "name": "list_agent_sessions",
+      "description": "List the AI agent sessions connected to Spyder, including yours, with their name and whether they're running a Spyder tool now. Use it to coordinate with them, e.g. before restarting a console or opening a project, which affect everyone. list_consoles shows which consoles each one runs code in.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "readOnly": true,
+      "destructive": false
+    }
+  ],
   "plots": [
     {
       "name": "get_figure",
