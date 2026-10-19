@@ -1341,10 +1341,11 @@ class IPythonConsole(SpyderDockablePlugin, RunExecutor):
     def list_consoles(self) -> list:
         """
         List the IPython consoles open in Spyder, with their id, name, state
-        (idle, busy, debugging or starting), which one is the current
-        console, who is running code in it (``user``, ``you`` or the name of
-        another agent), how many runs are waiting for it, and who created it
-        if an agent did (with new_console).
+        (idle, busy, debugging or starting), working directory (where
+        relative paths in code run there are resolved), which one is the
+        current console, who is running code in it (``user``, ``you`` or
+        the name of another agent), how many runs are waiting for it, and
+        who created it if an agent did (with new_console).
         """
         caller = current_caller()
         current = self.get_current_client()
@@ -1368,6 +1369,7 @@ class IPythonConsole(SpyderDockablePlugin, RunExecutor):
                     "id": console_id,
                     "name": client.get_name(),
                     "state": get_console_state(shellwidget),
+                    "cwd": shellwidget.get_cwd() or None,
                     "current": client is current,
                     "running_for": running_for,
                     "waiting_runs": scheduler.get_waiting(),

@@ -401,7 +401,7 @@
     },
     {
       "name": "list_consoles",
-      "description": "List the IPython consoles open in Spyder, with their id, name, state (idle, busy, debugging or starting), which one is the current console, who is running code in it (`user`, `you` or the name of another agent), how many runs are waiting for it, and who created it if an agent did (with new_console).",
+      "description": "List the IPython consoles open in Spyder, with their id, name, state (idle, busy, debugging or starting), working directory (where relative paths in code run there are resolved), which one is the current console, who is running code in it (`user`, `you` or the name of another agent), how many runs are waiting for it, and who created it if an agent did (with new_console).",
       "inputSchema": {
         "type": "object",
         "properties": {}

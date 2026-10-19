@@ -77,6 +77,11 @@ def test_list_consoles(ipyconsole, tools, qtbot):
     assert consoles[0]["state"] == "idle"
     assert consoles[0]["current"]
 
+    # The working directory, where relative paths in its code are resolved
+    shell = ipyconsole.get_current_shellwidget()
+    assert consoles[0]["cwd"] == shell.get_cwd()
+    assert consoles[0]["cwd"]
+
 
 def test_execute_code_output(ipyconsole, tools, qtbot):
     """Test that stdout and results are captured."""
@@ -355,6 +360,10 @@ def test_new_console(ipyconsole, tools, qtbot, tmp_path):
     )
     assert result["output"] == f"False {tmp_path}\n"
     assert user_shell.get_value("owner") == "user"
+
+    consoles, _ = call_tool_json(qtbot, tools["list_consoles"])
+    new = [c for c in consoles if c["id"] == console["id"]][0]
+    assert new["cwd"] == str(tmp_path)
 
     content, is_error = call_tool(
         qtbot, tools["new_console"], wdir=str(tmp_path / "missing")
