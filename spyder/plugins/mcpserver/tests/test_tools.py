@@ -365,6 +365,28 @@ def test_new_console(ipyconsole, tools, qtbot, tmp_path):
     new = [c for c in consoles if c["id"] == console["id"]][0]
     assert new["cwd"] == str(tmp_path)
 
+    # Its working directory doesn't become Spyder's (the one other plugins
+    # follow), even when its code changes it, until the user selects it
+    changes = []
+    ipyconsole.sig_current_directory_changed.connect(
+        lambda path, server_id: changes.append(path)
+    )
+    other = tmp_path / "other"
+    other.mkdir()
+    call_tool_json(
+        qtbot,
+        tools["execute_code"],
+        console_id=console["id"],
+        code=f"import os\nos.chdir({str(other)!r})",
+    )
+    qtbot.wait(1000)
+    assert changes == []
+    ipyconsole.set_current_shellwidget(
+        ipyconsole.get_console_shellwidget(console["id"])
+    )
+    qtbot.waitUntil(lambda: bool(changes))
+    assert set(changes) == {str(other)}
+
     content, is_error = call_tool(
         qtbot, tools["new_console"], wdir=str(tmp_path / "missing")
     )

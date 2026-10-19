@@ -2823,6 +2823,16 @@ class IPythonConsoleWidget(PluginMainWidget, CachedKernelMixin):  # noqa: PLR090
         Notify that the working directory was changed in the current console
         to other plugins.
         """
+        # Other consoles (e.g. running code in the background) don't change
+        # Spyder's working directory. Theirs is applied when they become the
+        # current console (see refresh_container).
+        sender = self.sender()
+        if (
+            isinstance(sender, ShellWidget)
+            and sender is not self.get_current_shellwidget()
+        ):
+            return
+
         logger.debug(f"Changing working directory: {server_id} - {dirname}")
         if dirname:
             self.sig_current_directory_changed.emit(dirname, server_id)
