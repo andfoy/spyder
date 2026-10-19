@@ -25,7 +25,7 @@ import uuid
 
 # Third party imports
 from qtpy.compat import from_qvariant
-from qtpy.QtCore import QByteArray, Qt, Signal, Slot
+from qtpy.QtCore import QByteArray, QFileInfo, Qt, Signal, Slot
 from qtpy.QtGui import QTextCursor
 from qtpy.QtPrintSupport import QAbstractPrintDialog, QPrintDialog, QPrinter
 from qtpy.QtWidgets import (QAction, QActionGroup, QApplication, QDialog,
@@ -47,7 +47,13 @@ from spyder.plugins.editor.api.run import (
     EditorRunConfiguration, FileRun, SelectionRun, CellRun,
     SelectionContextModificator, ExtraAction)
 from spyder.plugins.editor.utils.autosave import AutosaveForPlugin
+from spyder.plugins.editor.utils.disk_changes import (
+    OpenFilesWatcher,
+    read_file,
+    replace_text,
+)
 from spyder.plugins.editor.utils.editor import get_default_file_content
+from spyder.plugins.editor.utils.merge import merge3
 from spyder.plugins.editor.utils.switcher_manager import EditorSwitcherManager
 from spyder.plugins.editor.widgets.codeeditor import (
     CodeEditor,
@@ -56,6 +62,7 @@ from spyder.plugins.editor.widgets.codeeditor import (
     CodeEditorContextMenuSections,
     DocstringContext,
 )
+from spyder.plugins.editor.widgets.disk_conflict import DiskConflictBar
 from spyder.plugins.editor.widgets.editorstack import EditorStack
 from spyder.plugins.editor.widgets.splitter import EditorSplitter
 from spyder.plugins.editor.widgets.window import EditorMainWindow
@@ -277,6 +284,16 @@ class EditorMainWidget(PluginMainWidget):
 
         self.__first_open_files_setup = True
         self.editorstacks = []
+
+        # Follow changes made on disk to the open files
+        self._disk_watcher = OpenFilesWatcher(self)
+        self._disk_watcher.sig_file_changed.connect(
+            self._on_file_changed_on_disk
+        )
+
+        # Files whose changes on disk conflict with unsaved changes, with
+        # the text the changes come from (to merge them) and the disk's text
+        self._disk_conflicts: dict[str, tuple[str, str]] = {}
         self.last_focused_editorstack = {}
         self.editorwindows = []
         self.editorwindows_to_be_created = []
@@ -816,6 +833,13 @@ class EditorMainWidget(PluginMainWidget):
             self.stack_menu_actions,
             first=True
         )
+        self.disk_conflict_bar = DiskConflictBar(self)
+        self.disk_conflict_bar.sig_keep_mine.connect(self._keep_editor_text)
+        self.disk_conflict_bar.sig_take_disk.connect(self._take_disk_text)
+        self.disk_conflict_bar.sig_insert_markers.connect(
+            self._insert_conflict_markers
+        )
+        editor_layout.addWidget(self.disk_conflict_bar)
         editor_layout.addWidget(self.editorsplitter)
         editor_layout.addWidget(self.find_widget)
         editor_layout.addWidget(self._print_editor)
@@ -1563,6 +1587,15 @@ class EditorMainWidget(PluginMainWidget):
                 editorstack.file_saved_in_other_editorstack(original_filename,
                                                             filename)
 
+        # What's on disk now is the Editor's text, which wins any conflict
+        self._disk_conflicts.pop(original_filename, None)
+        self._disk_conflicts.pop(filename, None)
+        self._update_disk_watcher()
+        finfo = self._get_finfo(filename)
+        if finfo is not None:
+            self._disk_watcher.set_base(filename, finfo.editor.toPlainText())
+        self._update_disk_conflict_bar()
+
     # ---- Handling editor windows
     # -------------------------------------------------------------------------
     def setup_other_windows(self):
@@ -1773,6 +1806,9 @@ class EditorMainWidget(PluginMainWidget):
         --> modification ('*' added to title)
         --> current edited file has changed
         """
+        self._update_disk_watcher()
+        self._update_disk_conflict_bar()
+
         # Refresh Python file dependent actions:
         editor = self.get_current_editor()
         if editor:
@@ -3487,3 +3523,139 @@ class EditorMainWidget(PluginMainWidget):
         """
         for editorstack in self.editorstacks:
             editorstack.set_current_project_path(root_path)
+
+    # ---- Changes made on disk to open files
+    # -------------------------------------------------------------------------
+    def _update_disk_watcher(self) -> None:
+        """Watch the files open in the Editor."""
+        if self.editorstacks:
+            self._disk_watcher.set_files(self.get_filenames())
+        for filename in list(self._disk_conflicts):
+            if filename not in self._disk_watcher.get_files():
+                self._disk_conflicts.pop(filename)
+
+    def _get_finfo(self, filename):
+        """File info of an open file, from the first editorstack."""
+        if not self.editorstacks:
+            return None
+        editorstack = self.editorstacks[0]
+        index = editorstack.has_filename(filename)
+        if index is None:
+            return None
+        return editorstack.data[index]
+
+    def _on_file_changed_on_disk(self, filename: str) -> None:
+        """
+        Bring the changes made on disk to an open file into the Editor, as
+        an undoable edit. Unsaved changes are kept: the changes are merged
+        if they don't conflict, and otherwise the user is asked (without
+        interrupting them) what to do.
+        """
+        finfo = self._get_finfo(filename)
+        if finfo is None or finfo.newly_created:
+            return
+
+        try:
+            disk_text = read_file(filename)
+        except Exception:
+            # The Editor reports it when the file gets focus
+            logger.debug("Could not read %s", filename, exc_info=True)
+            return
+
+        editor = finfo.editor
+        document = editor.document()
+        editor_text = editor.toPlainText()
+        base = self._disk_watcher.get_base(filename)
+        self._disk_watcher.set_base(filename, disk_text)
+
+        if filename in self._disk_conflicts:
+            # Merge from where the conflict started
+            base = self._disk_conflicts[filename][0]
+
+        if editor_text == disk_text:
+            # E.g. Spyder saved it
+            self._disk_conflicts.pop(filename, None)
+            document.setModified(False)
+        elif not document.isModified():
+            replace_text(editor, disk_text)
+            document.setModified(False)
+        else:
+            merge = merge3(
+                base if base is not None else editor_text,
+                editor_text,
+                disk_text,
+            )
+            if merge.conflicts or base is None:
+                self._disk_conflicts[filename] = (
+                    base if base is not None else editor_text,
+                    disk_text,
+                )
+            else:
+                self._disk_conflicts.pop(filename, None)
+                replace_text(editor, merge.text)
+
+        self._sync_with_disk(filename)
+        self._update_disk_conflict_bar()
+
+    def _sync_with_disk(self, filename: str) -> None:
+        """
+        Record that the Editor has seen the file's current contents, so
+        it doesn't ask to reload it when it gets focus.
+        """
+        last_modified = QFileInfo(filename).lastModified()
+        for editorstack in self.editorstacks:
+            index = editorstack.has_filename(filename)
+            if index is None:
+                continue
+            finfo = editorstack.data[index]
+            finfo.lastmodified = last_modified
+            if not finfo.editor.document().isModified():
+                editorstack.autosave.file_hashes[filename] = (
+                    editorstack.compute_hash(finfo)
+                )
+            editorstack.modification_changed(index=index)
+
+    def _update_disk_conflict_bar(self) -> None:
+        """Show the conflict of the current file, if it has one."""
+        bar = getattr(self, "disk_conflict_bar", None)
+        if bar is None:
+            return
+
+        filename = self.get_current_filename() if self.editorstacks else None
+        if filename not in self._disk_conflicts:
+            bar.dismiss()
+            return
+
+        base, disk_text = self._disk_conflicts[filename]
+        finfo = self._get_finfo(filename)
+        conflicts = merge3(
+            base, finfo.editor.toPlainText(), disk_text
+        ).conflicts
+        bar.show_conflict(filename, max(conflicts, 1))
+
+    def _resolve_disk_conflict(self, filename: str, get_text) -> None:
+        conflict = self._disk_conflicts.pop(filename, None)
+        finfo = self._get_finfo(filename)
+        if conflict is None or finfo is None:
+            return
+        base, disk_text = conflict
+        new_text = get_text(base, finfo.editor.toPlainText(), disk_text)
+        if new_text is not None:
+            replace_text(finfo.editor, new_text)
+            finfo.editor.document().setModified(new_text != disk_text)
+        self._sync_with_disk(filename)
+        self._update_disk_conflict_bar()
+
+    def _keep_editor_text(self, filename: str) -> None:
+        self._resolve_disk_conflict(filename, lambda base, ours, disk: None)
+
+    def _take_disk_text(self, filename: str) -> None:
+        self._resolve_disk_conflict(filename, lambda base, ours, disk: disk)
+
+    def _insert_conflict_markers(self, filename: str) -> None:
+        self._resolve_disk_conflict(
+            filename,
+            lambda base, ours, disk: merge3(
+                base, ours, disk, with_markers=True
+            ).text,
+        )
