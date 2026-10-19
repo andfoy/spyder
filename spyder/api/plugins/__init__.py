@@ -29,6 +29,7 @@ from .exposed import (  # noqa
     Caller,
     ExposedCallError,
     Image,
+    calling_as,
     current_call_context,
     current_caller,
     expose,
@@ -47,6 +48,7 @@ __all__ = [
     "CallContext",
     "current_caller",
     "current_call_context",
+    "calling_as",
     "ExposedCallError",
     "Image",
 ]

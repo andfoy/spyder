@@ -28,6 +28,25 @@ Handlers always run in the main Qt thread. They receive a :class:`ToolCall`
 and can either return the result right away (a string, a content dict or a
 list of them) or return ``None`` and call :meth:`ToolCall.reply` later, e.g.
 from a kernel callback.
+
+Plugins that start agents
+-------------------------
+Plugins that run agent sessions in Spyder (e.g. in a terminal pane) use the
+MCP server plugin to connect them and tell them apart:
+
+* :meth:`MCPServer.start_server` starts the server for the plugin's
+  sessions, even if the user didn't enable it, and
+  :meth:`MCPServer.get_connection_info` gives the URL and HTTP headers that
+  each session must send. The ``X-Spyder-Client-Id`` header identifies the
+  session in tool calls, so exposed methods see it as their
+  :func:`spyder.api.plugins.current_caller`.
+* :meth:`MCPServer.register_client` lists a session before its first tool
+  call, so it gets notes about what happens in Spyder from the start (see
+  :meth:`MCPServer.notify_clients` and :meth:`MCPServer.get_notes_url`).
+* :meth:`MCPServer.set_client_argument` sets default tool arguments for a
+  session (e.g. the ``console_id`` it works in), and
+  :meth:`MCPServer.register_argument_asker` asks the user for an argument
+  when a session calls a tool without it.
 """
 
 # Standard library imports

@@ -27,10 +27,108 @@ Exposed methods are a contract with outside callers, so they must:
   call can't be completed, with a message that tells the caller what to do.
 * Never open dialogs or wait for user input, which would block Spyder.
 
-Exposed methods always run in the main Qt thread. Clients can say who is
-calling with :func:`calling_as`, so exposed methods can tell callers apart
-with :func:`current_caller` (e.g. to only let an agent interrupt the code it
-started).
+Exposed methods always run in the main Qt thread.
+
+Example
+-------
+A plugin exposes a method that returns data right away, and one that
+finishes later::
+
+    from concurrent.futures import Future
+
+    from spyder.api.plugins import (
+        ExposedCallError, SpyderDockablePlugin, expose
+    )
+
+    class MyPlugin(SpyderDockablePlugin):
+
+        @expose(read_only=True)
+        def list_items(self, pattern: str = "") -> list:
+            \"\"\"
+            List the items shown in My plugin.
+
+            Parameters
+            ----------
+            pattern: str, optional
+                Only list the items whose name contains it.
+            \"\"\"
+            return [
+                {"name": item.name, "size": item.size}
+                for item in self.get_widget().items
+                if pattern in item.name
+            ]
+
+        @expose(destructive=True)
+        def remove_item(self, name: str) -> Future:
+            \"\"\"
+            Remove an item from My plugin.
+
+            Parameters
+            ----------
+            name: str
+                Name of the item, as given by list_items.
+            \"\"\"
+            if name not in self.get_widget().names():
+                raise ExposedCallError(
+                    f"There's no item {name}. Use list_items to see them."
+                )
+            future = Future()
+            self.get_widget().remove(
+                name, on_done=lambda: future.set_result(None)
+            )
+            return future
+
+The first line of the docstring, and its description of each parameter, is
+what callers read to decide when and how to call the method, so write them
+for someone that doesn't know Spyder's internals.
+
+Working with the caller
+-----------------------
+Clients run exposed methods within :func:`calling_as`, which says who is
+calling (a :class:`Caller`) and how to reach them while the method runs (a
+:class:`CallContext`). Inside an exposed method:
+
+* :func:`current_caller` tells callers apart, e.g. to only let an agent
+  interrupt the code it started. It's ``None`` when the method isn't called
+  from outside.
+* :func:`current_call_context` lets the method ask the caller's user a
+  question where they are already looking (e.g. an agent's chat), with
+  :meth:`CallContext.ask_user`, and report what it's doing with
+  :meth:`CallContext.report_progress`. Check
+  :attr:`CallContext.can_ask_user` first: if the client can't ask, refuse
+  changes that need the user's confirmation instead of making them::
+
+      @expose(destructive=True)
+      def reset_items(self) -> Future:
+          \"\"\"Remove all the items from My plugin.\"\"\"
+          context = current_call_context()
+          if not context.can_ask_user:
+              raise ExposedCallError(
+                  "This needs the user's confirmation. Ask them to do it "
+                  "in My plugin."
+              )
+
+          result = Future()
+
+          def on_answer(answer):
+              if answer.result() == _("Remove"):
+                  self.get_widget().clear()
+                  result.set_result(None)
+              else:
+                  result.set_exception(
+                      ExposedCallError("The user chose not to do it.")
+                  )
+
+          context.ask_user(
+              _("Remove all the items from My plugin?"),
+              [_("Remove"), _("Cancel")],
+          ).add_done_callback(on_answer)
+          return result
+
+Both are context variables, so read them when the method is called, not in
+callbacks that run later. To call other exposed methods on behalf of the
+same caller from such a callback, run them within
+``calling_as(caller, context)`` again.
 """
 
 # Standard library imports
