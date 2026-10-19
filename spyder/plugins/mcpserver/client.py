@@ -16,6 +16,7 @@ thread.
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from collections.abc import Callable
 import logging
 import os
@@ -35,6 +36,9 @@ from spyder.plugins.mcpserver.bridge import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Lines of the server's output kept to report why it exited
+OUTPUT_TAIL = 30
 
 # Global loop name for AsyncDispatcher in the MCP client.
 _MCP_LOOP = "mcp"
@@ -89,6 +93,15 @@ class MCPServerClient(QObject):
         self._process: asyncio.subprocess.Process | None = None
         self.url: str | None = None
 
+        # Whether the server is starting (its process is created
+        # asynchronously) or being stopped on purpose
+        self._starting = False
+        self._stopping = False
+        self._output: deque[str] = deque(maxlen=OUTPUT_TAIL)
+
+        self.exited_unexpectedly = False
+        """Whether the server's last exit wasn't requested with stop."""
+
     # ---- Public API
     # -------------------------------------------------------------------------
     @property
@@ -96,15 +109,21 @@ class MCPServerClient(QObject):
         return self._process is not None and self._process.returncode is None
 
     def start(self, host: str, port: int, token: str) -> None:
-        """Start the server subprocess."""
-        if self.is_running:
+        """
+        Start the server subprocess, unless it's running or starting (e.g.
+        if several clients ask for it at once).
+        """
+        if self.is_running or self._starting:
             return
+        self._starting = True
+        self._stopping = False
         self._run(host, port, token)
 
     def stop(self) -> None:
         """Stop the server subprocess."""
         if not self.is_running:
             return
+        self._stopping = True
         try:
             self._stop().result(timeout=5)
         except Exception:
@@ -137,10 +156,15 @@ class MCPServerClient(QObject):
             )
         except OSError:
             logger.exception("Could not start the MCP server")
+            self._starting = False
+            self.exited_unexpectedly = True
             self.sig_server_stopped.emit(-1)
             return
+        finally:
+            self._starting = False
 
         process = self._process
+        self._output.clear()
 
         async def write(data: bytes) -> None:
             process.stdin.write(data)
@@ -158,8 +182,17 @@ class MCPServerClient(QObject):
 
         await asyncio.gather(peer.run(), self._log_stderr(process))
         returncode = await process.wait()
-        logger.info("MCP server exited with code %s", returncode)
         self.url = None
+        self.exited_unexpectedly = not self._stopping
+        if self.exited_unexpectedly:
+            logger.error(
+                "The MCP server exited unexpectedly with code %s. Its last "
+                "output was:\n%s",
+                returncode,
+                "\n".join(self._output) or "(none)",
+            )
+        else:
+            logger.info("MCP server exited with code %s", returncode)
         self.sig_server_stopped.emit(returncode)
 
     @AsyncDispatcher(loop=_MCP_LOOP)
@@ -178,7 +211,9 @@ class MCPServerClient(QObject):
 
     async def _log_stderr(self, process: asyncio.subprocess.Process) -> None:
         while line := await process.stderr.readline():
-            logger.debug("[server] %s", line.decode(errors="replace").rstrip())
+            text = line.decode(errors="replace").rstrip()
+            self._output.append(text)
+            logger.debug("[server] %s", text)
 
     async def _handle_server_ready(self, params: dict) -> None:
         self.url = params["url"]

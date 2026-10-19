@@ -17,6 +17,7 @@ forwards tool calls to this plugin.
 # Standard library imports
 import logging
 import secrets
+import time
 
 # Third-party imports
 from qtpy.QtCore import Signal
@@ -32,7 +33,10 @@ from spyder.api.plugin_registration.registry import PLUGIN_REGISTRY
 from spyder.api.translations import _
 from spyder.plugins.mainmenu.api import ApplicationMenus, ToolsMenuSections
 from spyder.plugins.mcpserver.api import MCPTool
-from spyder.plugins.mcpserver.bridge import CLIENT_ID_HEADER, CLIENT_NAME_HEADER
+from spyder.plugins.mcpserver.bridge import (
+    CLIENT_ID_HEADER,
+    CLIENT_NAME_HEADER,
+)
 from spyder.plugins.mcpserver.client import MCPServerClient
 from spyder.plugins.mcpserver.container import (
     MCPServerActions,
@@ -92,6 +96,19 @@ class MCPServer(SpyderPluginV2):
         self._collected: dict[str, tuple[list[str], int]] = {}
 
         self._dispatcher = ToolDispatcher(self._get_available_tools)
+
+        # Port of the last server started, to restart it on the same one
+        self._server_port: int | None = None
+        self._restarts: list[float] = []
+
+        # Value of the "enabled" option last applied, since Spyder also
+        # notifies options that didn't change (e.g. when it sets the main
+        # interpreter)
+        self._enabled = self.get_conf("enabled")
+
+        # Whether other plugins started the server for their own clients
+        # (e.g. agent sessions), so it keeps running for them
+        self._used_by_plugins = False
         self._client = MCPServerClient(
             self, self._get_available_tools, self._dispatcher.call
         )
@@ -108,7 +125,7 @@ class MCPServer(SpyderPluginV2):
     def on_mainwindow_visible(self):
         self._collect_available_plugins()
         if self.get_conf("enabled"):
-            self.start_server()
+            self._start_server()
 
     def on_close(self, cancelable=False):
         try:
@@ -215,13 +232,33 @@ class MCPServer(SpyderPluginV2):
         self._dispatcher.register_argument_asker(name, asker)
 
     def start_server(self) -> None:
-        """Start the MCP server subprocess."""
+        """
+        Start the MCP server subprocess for a plugin's clients (e.g. agent
+        sessions).
+
+        It keeps running while Spyder runs, even if the user turns off the
+        option to enable it (which only controls whether it starts with
+        Spyder for other agents).
+        """
+        self._used_by_plugins = True
+        self._start_server()
+
+    def _start_server(self, port: int | None = None) -> None:
+        """
+        Start the MCP server subprocess.
+
+        Parameters
+        ----------
+        port: int, optional
+            Port to use if it's free. By default, the one in the settings.
+        """
         token = self.get_conf("token")
         if not token:
             token = secrets.token_urlsafe(32)
             self.set_conf("token", token)
 
-        port = self.get_conf("port")
+        if port is None:
+            port = self.get_conf("port")
         free_port = select_port(default_port=port)
         if free_port != port:
             logger.warning(
@@ -231,6 +268,7 @@ class MCPServer(SpyderPluginV2):
                 free_port,
             )
 
+        self._server_port = free_port
         self._client.start(self.get_conf("host"), free_port, token)
 
     def stop_server(self) -> None:
@@ -350,9 +388,12 @@ class MCPServer(SpyderPluginV2):
             )
 
     def _on_enabled_changed(self, enabled: bool) -> None:
+        if enabled == self._enabled:
+            return
+        self._enabled = enabled
         if enabled:
-            self.start_server()
-        else:
+            self._start_server()
+        elif not self._used_by_plugins:
             self.stop_server()
 
     def _on_server_ready(self, url: str) -> None:
@@ -362,9 +403,19 @@ class MCPServer(SpyderPluginV2):
     def _on_server_stopped(self, returncode: int) -> None:
         self.get_container().set_server_running(False)
         self.sig_server_stopped.emit()
-        if returncode not in (0, None) and self.get_conf("enabled"):
+
+        # Restart it if it exited without being stopped (the client logs
+        # why), on the same port so connected agents can reconnect. Give up
+        # if it keeps exiting.
+        if not self._client.exited_unexpectedly:
+            return
+        now = time.monotonic()
+        self._restarts = [t for t in self._restarts if now - t < 60]
+        if len(self._restarts) >= 3:
             logger.error(
-                "The MCP server exited with code %s. Run Spyder with debug "
-                "logging to see its output.",
-                returncode,
+                "The MCP server keeps exiting, so it won't be restarted."
             )
+            return
+        self._restarts.append(now)
+        logger.warning("Restarting the MCP server")
+        self._start_server(port=self._server_port)
