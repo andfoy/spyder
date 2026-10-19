@@ -35,6 +35,7 @@ import uuid
 # Third-party imports
 import mcp.types as types
 from mcp.server.lowlevel import Server
+from mcp_types.version import MODERN_PROTOCOL_VERSIONS
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 import uvicorn
@@ -53,6 +54,13 @@ from spyder.plugins.mcpserver.bridge import (
 logger = logging.getLogger("spyder.mcpserver")
 
 MCP_PATH = "/mcp"
+
+# Key of Spyder's question in the input requests of a tool call result
+QUESTION_KEY = "spyder_question"
+
+# Seconds a tool call waits for its client to answer Spyder's question
+# before taking it as cancelled
+ANSWER_TIMEOUT = 30 * 60
 
 INSTRUCTIONS = """\
 This server controls a running Spyder IDE session.
@@ -120,21 +128,113 @@ def get_client(ctx) -> dict | None:
     session_id = headers.get("mcp-session-id")
     if session_id:
         return {"id": f"mcp-session:{session_id}", "name": "External agent"}
+
+    # The 2026-07-28 protocol has no sessions, so all the clients of the
+    # same kind look the same
+    params = getattr(getattr(ctx, "session", None), "client_params", None)
+    info = getattr(params, "client_info", None)
+    if info is not None and info.name:
+        return {
+            "id": f"mcp-client:{info.name}",
+            "name": f"External agent ({info.title or info.name})",
+        }
     return None
 
 
 def can_ask_user(ctx) -> bool:
     """
     Whether the client of a request can ask its user (it supports form
-    elicitation and can receive requests now).
+    elicitation and, on protocols before 2026-07-28, can receive requests
+    now).
     """
     session = getattr(ctx, "session", None)
     capabilities = getattr(session, "client_capabilities", None)
+    if capabilities is None or getattr(
+        capabilities, "elicitation", None
+    ) is None:
+        return False
     return bool(
-        capabilities is not None
-        and getattr(capabilities, "elicitation", None) is not None
-        and getattr(session, "can_send_request", False)
+        getattr(session, "can_send_request", False)
+        or is_modern(ctx)
     )
+
+
+def is_modern(ctx) -> bool:
+    """
+    Whether a request uses the 2026-07-28 protocol or a later one, where
+    the server can't send requests to the client while a tool call runs.
+    Instead, the call returns an "input required" result and the client
+    makes it again with the answers.
+    """
+    return getattr(ctx, "protocol_version", None) in MODERN_PROTOCOL_VERSIONS
+
+
+def question_schema(params: dict) -> dict:
+    """Elicitation form schema for one of Spyder's questions."""
+    return {
+        "type": "object",
+        "properties": {
+            "choice": {
+                "type": "string",
+                "title": params.get("title") or "Choice",
+                "enum": params["choices"],
+            }
+        },
+        "required": ["choice"],
+    }
+
+
+def to_answer(response) -> dict:
+    """Spyder's answer from an elicitation result (or its wire dict)."""
+    if response is None:
+        return {"action": "cancel", "choice": None}
+    if isinstance(response, dict):
+        action = response.get("action")
+        content = response.get("content")
+    else:
+        action = getattr(response, "action", None)
+        content = getattr(response, "content", None)
+    return {
+        "action": action or "cancel",
+        "choice": (content or {}).get("choice"),
+    }
+
+
+class RunningCall:
+    """
+    A tool call that Spyder is running.
+
+    With the 2026-07-28 protocol, it outlives the request that started it
+    when Spyder asks the client's user something: the request returns the
+    question, and the call goes on when the client makes it again with the
+    answer.
+    """
+
+    def __init__(self, call_id: str, ctx, client: dict | None) -> None:
+        self.call_id = call_id
+        self.ctx = ctx
+        self.client = client
+        self.task: asyncio.Task | None = None
+        self.progress = 0
+        self.question: dict | None = None
+        self.answer: asyncio.Future | None = None
+        self.asked = asyncio.Event()
+        self.expiry: asyncio.TimerHandle | None = None
+
+    def ask(self, params: dict) -> asyncio.Future:
+        """Ask the client's user a question, answered in a later request."""
+        self.question = params
+        self.answer = asyncio.get_running_loop().create_future()
+        self.asked.set()
+        return self.answer
+
+    def give_answer(self, answer: dict) -> None:
+        if self.expiry is not None:
+            self.expiry.cancel()
+            self.expiry = None
+        if self.answer is not None and not self.answer.done():
+            self.answer.set_result(answer)
+        self.question = self.answer = None
 
 
 def create_mcp_server(peer: JsonRpcPeer) -> Server:
@@ -146,33 +246,100 @@ def create_mcp_server(peer: JsonRpcPeer) -> Server:
             tools=[types.Tool.model_validate(tool) for tool in tools]
         )
 
-    # Contexts of the tool calls running, so Spyder can ask their client's
-    # user or report progress while they run
-    calls: dict[str, object] = {}
-    progress: dict[str, int] = {}
+    # Tool calls running, so Spyder can ask their client's user or report
+    # progress while they run
+    calls: dict[str, RunningCall] = {}
 
-    async def on_call_tool(ctx, params) -> types.CallToolResult:
-        call_id = uuid.uuid4().hex
-        calls[call_id] = ctx
+    def error_result(text: str) -> types.CallToolResult:
+        return types.CallToolResult(
+            content=[types.TextContent(type="text", text=text)],
+            is_error=True,
+        )
+
+    def forget(call: RunningCall) -> None:
+        if calls.get(call.call_id) is call:
+            del calls[call.call_id]
+        if call.expiry is not None:
+            call.expiry.cancel()
+
+    def expire(call: RunningCall) -> None:
+        """The client didn't come back with an answer, so give up on it."""
+        call.expiry = None
+        call.give_answer({"action": "cancel", "choice": None})
+        # Nobody is waiting for the result anymore
+        forget(call)
+
+    async def on_call_tool(
+        ctx, params
+    ) -> types.CallToolResult | types.InputRequiredResult:
+        client = get_client(ctx)
+        if params.request_state is not None:
+            # The client answers a question Spyder asked during the call
+            call = calls.get(params.request_state)
+            if call is None or call.client != client:
+                return error_result(
+                    "Spyder no longer waits for an answer to this call."
+                )
+            call.ctx = ctx
+            responses = params.input_responses or {}
+            call.give_answer(to_answer(responses.get(QUESTION_KEY)))
+        else:
+            call = RunningCall(uuid.uuid4().hex, ctx, client)
+            calls[call.call_id] = call
+            call.task = asyncio.ensure_future(
+                peer.request(
+                    BridgeMethods.CallTool,
+                    {
+                        "name": params.name,
+                        "arguments": params.arguments or {},
+                        "client": client,
+                        "callId": call.call_id,
+                        "canAskUser": can_ask_user(ctx),
+                    },
+                )
+            )
+            # Its result is dropped if the client never comes back
+            call.task.add_done_callback(
+                lambda task: task.cancelled() or task.exception()
+            )
+
+        asked = asyncio.ensure_future(call.asked.wait())
         try:
-            result = await peer.request(
-                BridgeMethods.CallTool,
-                {
-                    "name": params.name,
-                    "arguments": params.arguments or {},
-                    "client": get_client(ctx),
-                    "callId": call_id,
-                    "canAskUser": can_ask_user(ctx),
-                },
+            await asyncio.wait(
+                {call.task, asked}, return_when=asyncio.FIRST_COMPLETED
             )
-        except BridgeError as error:
-            return types.CallToolResult(
-                content=[types.TextContent(type="text", text=str(error))],
-                is_error=True,
-            )
+        except asyncio.CancelledError:
+            # The client went away
+            call.task.cancel()
+            forget(call)
+            raise
         finally:
-            calls.pop(call_id, None)
-            progress.pop(call_id, None)
+            asked.cancel()
+
+        if not call.task.done():
+            # Spyder asks the user, so the client has to come back with
+            # the answer
+            call.asked.clear()
+            call.expiry = asyncio.get_running_loop().call_later(
+                ANSWER_TIMEOUT, expire, call
+            )
+            return types.InputRequiredResult(
+                input_requests={
+                    QUESTION_KEY: types.ElicitRequest(
+                        params=types.ElicitRequestFormParams(
+                            message=call.question["message"],
+                            requested_schema=question_schema(call.question),
+                        )
+                    )
+                },
+                request_state=call.call_id,
+            )
+
+        forget(call)
+        try:
+            result = call.task.result()
+        except BridgeError as error:
+            return error_result(str(error))
 
         return types.CallToolResult(
             content=[to_content(item) for item in result["content"]],
@@ -184,35 +351,35 @@ def create_mcp_server(peer: JsonRpcPeer) -> Server:
         Ask the user of the client that made a tool call to choose one of
         ``choices`` (an elicitation form).
         """
-        ctx = calls.get(params["callId"])
-        if ctx is None or not can_ask_user(ctx):
+        call = calls.get(params["callId"])
+        if call is None or not can_ask_user(call.ctx):
             return {"action": "cancel", "choice": None}
-        schema = {
-            "type": "object",
-            "properties": {
-                "choice": {
-                    "type": "string",
-                    "title": params.get("title") or "Choice",
-                    "enum": params["choices"],
-                }
-            },
-            "required": ["choice"],
-        }
+
+        if is_modern(call.ctx):
+            return await call.ask(params)
+
+        ctx = call.ctx
         result = await ctx.session.elicit_form(
-            params["message"], schema, related_request_id=ctx.request_id
+            params["message"],
+            question_schema(params),
+            related_request_id=ctx.request_id,
         )
-        content = result.content or {}
-        return {"action": result.action, "choice": content.get("choice")}
+        return to_answer(result)
 
     async def on_report_progress(params: dict) -> None:
         """Report progress of a tool call, if its client asked for it."""
-        ctx = calls.get(params["callId"])
-        if ctx is None:
+        call = calls.get(params["callId"])
+        if call is None:
             return
-        step = progress[params["callId"]] = (
-            progress.get(params["callId"], 0) + 1
-        )
-        await ctx.session.report_progress(step, message=params.get("message"))
+        call.progress += 1
+        try:
+            await call.ctx.session.report_progress(
+                call.progress, message=params.get("message")
+            )
+        except Exception:
+            # E.g. the request that the progress was for is done because
+            # the client has to answer a question
+            logger.debug("Couldn't report progress", exc_info=True)
 
     peer.set_handler(BridgeMethods.AskUser, on_ask_user)
     peer.set_handler(BridgeMethods.ReportProgress, on_report_progress)

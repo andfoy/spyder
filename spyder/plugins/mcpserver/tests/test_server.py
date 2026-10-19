@@ -28,9 +28,12 @@ from spyder.utils.misc import select_port
 httpx2 = pytest.importorskip("httpx2")
 pytest.importorskip("mcp")
 
+from mcp.client.client import Client  # noqa: E402
 from mcp.client.session import ClientSession  # noqa: E402
 from mcp.client.streamable_http import streamable_http_client  # noqa: E402
 import mcp.types as types  # noqa: E402
+
+from spyder.plugins.mcpserver.server import QUESTION_KEY  # noqa: E402
 
 TOKEN = "test-token"
 
@@ -72,23 +75,25 @@ async def start_server():
         text = params["arguments"]["text"]
         if text == "fail":
             raise RuntimeError("Tool failed")
-        if text == "ask":
-            # Spyder asks the user of the client that made the call
-            answer = await peer.request(
-                BridgeMethods.AskUser,
-                {
-                    "callId": params["callId"],
-                    "message": "Which console?",
-                    "choices": ["Console 1/A", "New console"],
-                },
-            )
-            await peer.notify(
-                BridgeMethods.ReportProgress,
-                {"callId": params["callId"], "message": "Running"},
-            )
-            text = f"{params['canAskUser']} {answer['action']} " + str(
-                answer["choice"]
-            )
+        if text.startswith("ask"):
+            # Spyder asks the user of the client that made the call, as
+            # many times as "ask" is repeated
+            answers = []
+            for __ in range(text.count("ask")):
+                answer = await peer.request(
+                    BridgeMethods.AskUser,
+                    {
+                        "callId": params["callId"],
+                        "message": "Which console?",
+                        "choices": ["Console 1/A", "New console"],
+                    },
+                )
+                await peer.notify(
+                    BridgeMethods.ReportProgress,
+                    {"callId": params["callId"], "message": "Running"},
+                )
+                answers.append(f"{answer['action']} {answer['choice']}")
+            text = f"{params['canAskUser']} " + ", ".join(answers)
         return {
             "content": [
                 {"type": "text", "text": text},
@@ -180,6 +185,30 @@ def test_server():
                         await session.initialize()
                         await session.call_tool("echo", {"text": "hi"})
             assert clients[-1] == {"id": "agent-2", "name": "Agent 2"}
+
+            # With the 2026-07-28 protocol, which has no sessions, clients
+            # without their own id are told apart by kind
+            headers = {"Authorization": f"Bearer {TOKEN}"}
+            async with httpx2.AsyncClient(headers=headers) as http:
+                async with Client(
+                    streamable_http_client(url, http_client=http),
+                    mode="auto",
+                    client_info=types.Implementation(
+                        name="some-agent", title="Some Agent", version="1"
+                    ),
+                ) as client:
+                    assert client.protocol_version == "2026-07-28"
+                    await client.call_tool("echo", {"text": "hi"})
+                    async with Client(
+                        streamable_http_client(url, http_client=http),
+                        mode="auto",
+                    ) as other:
+                        await other.call_tool("echo", {"text": "hi"})
+            assert clients[-2] == {
+                "id": "mcp-client:some-agent",
+                "name": "External agent (Some Agent)",
+            }
+            assert clients[-1]["id"] != clients[-2]["id"]
         finally:
             # The server exits when its stdin is closed
             process.stdin.close()
@@ -230,6 +259,42 @@ def test_ask_user():
                             assert result.content[0].text == expected
 
             assert questions[0].message == "Which console?"
+
+            # With the 2026-07-28 protocol, the call returns the question
+            # and the client makes it again with the answer
+            for callback, text, expected in [
+                (answer, "ask", "True accept New console"),
+                (
+                    answer,
+                    "askask",
+                    "True accept New console, accept New console",
+                ),
+                (decline, "ask", "True decline None"),
+                (None, "ask", "False cancel None"),
+            ]:
+                async with httpx2.AsyncClient(headers=headers) as http:
+                    async with Client(
+                        streamable_http_client(url, http_client=http),
+                        mode="auto",
+                        elicitation_callback=callback,
+                    ) as client:
+                        assert client.protocol_version == "2026-07-28"
+                        result = await client.call_tool("echo", {"text": text})
+                        assert result.content[0].text == expected
+
+                        # Answers to calls Spyder doesn't know are refused
+                        result = await client.call_tool(
+                            "echo",
+                            {"text": text},
+                            request_state="unknown",
+                            input_responses={
+                                QUESTION_KEY: types.ElicitResult(
+                                    action="accept",
+                                    content={"choice": "New console"},
+                                )
+                            },
+                        )
+                        assert result.is_error
         finally:
             process.stdin.close()
             assert await asyncio.wait_for(process.wait(), 10) == 0
