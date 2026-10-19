@@ -473,9 +473,9 @@ def test_project_tools(main_window, tools, qtbot, tmp_path):
         result = call_tool_json(qtbot, tools["close_project"])
     assert result == {"project": str(folder)}
     assert projects.get_active_project_path() is None
-    assert mcp_server._dispatcher.take_notes("agent-2") == [
-        f"Agent 1 closed the project {folder}."
-    ]
+    notes = mcp_server._dispatcher.take_notes("agent-2")
+    assert len(notes) == 1
+    assert notes[0].startswith(f"Agent 1 closed the project {folder}.")
 
 
 def test_console_notes(main_window, tools, qtbot):
@@ -512,8 +512,8 @@ def test_console_notes(main_window, tools, qtbot):
     ipyconsole.restart_kernel()
     qtbot.waitUntil(lambda: bool(notes.get("agent-1")), timeout=SHELL_TIMEOUT)
     assert notes["agent-1"] == [
-        "Console 1/A was restarted, so the variables, imports and figures "
-        "created in it before are gone."
+        "The user restarted console 1/A in Spyder, so the variables, "
+        "imports and figures created in it before are gone."
     ]
     assert "agent-2" not in notes
 
@@ -522,7 +522,7 @@ def test_console_notes(main_window, tools, qtbot):
     qtbot.wait(1000)
     texts = run("y = 2")
     assert texts[0].startswith("Since your last call, in Spyder:")
-    assert "Console 1/A was restarted" in texts[0]
+    assert "The user restarted console 1/A" in texts[0]
 
     # A kernel that dies. It may die while the call that killed it is still
     # running, so the note can come with that call's result.
@@ -546,7 +546,7 @@ def test_console_notes(main_window, tools, qtbot):
     ipyconsole.get_widget().close_client(client=client, ask_recursive=False)
     qtbot.waitUntil(lambda: bool(notes.get("agent-1")), timeout=SHELL_TIMEOUT)
     assert notes.pop("agent-1") == [
-        f"Console {console['id']}, which you used, was closed. Use "
+        f"The user closed console {console['id']}, which you used. Use "
         f"list_consoles to choose another console, or new_console to open "
         f"one."
     ]

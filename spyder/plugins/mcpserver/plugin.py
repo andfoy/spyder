@@ -547,8 +547,14 @@ class MCPServer(SpyderPluginV2):
         if not isinstance(path, str) or not path:
             return
         who, client_id = self._describe_actor()
+
+        # Its consoles restart right after
+        self._quiet_consoles_until = time.monotonic() + 15
         self.notify_clients(
-            f"{who} closed the project {path}.", exclude=client_id
+            f"{who} closed the project {path}. Closing a project restarts "
+            f"Spyder's IPython consoles, so the variables, imports and "
+            f"figures created in them before are probably gone.",
+            exclude=client_id,
         )
 
     def _on_tool_called(self, caller, tool: MCPTool, arguments: dict) -> None:
@@ -599,16 +605,20 @@ class MCPServer(SpyderPluginV2):
                 "and figures created in it before are gone."
             )
         else:
+            # Agents can't restart consoles, and restarts caused by project
+            # changes aren't noted, so it was the user
             message = (
-                "Console {id} was restarted, so the variables, imports and "
-                "figures created in it before are gone."
+                "The user restarted console {id} in Spyder, so the "
+                "variables, imports and figures created in it before are "
+                "gone."
             )
         self._notify_console_users(shellwidget, message)
 
     def _on_console_closed(self, shellwidget) -> None:
+        # Like restarts, it was the user
         console_id = self._notify_console_users(
             shellwidget,
-            "Console {id}, which you used, was closed. Use list_consoles to "
-            "choose another console, or new_console to open one.",
+            "The user closed console {id}, which you used. Use list_consoles "
+            "to choose another console, or new_console to open one.",
         )
         self._console_users.pop(console_id, None)
